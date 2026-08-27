@@ -1,0 +1,1 @@
+INSERT INTO public.tournament_settings (slug, enabled) VALUES ('champions-league', true) ON CONFLICT (slug) DO NOTHING;

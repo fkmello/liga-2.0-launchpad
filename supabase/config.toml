@@ -1,0 +1,25 @@
+project_id = "ctcheittftkcnueojoco"
+
+[functions.google-sheets]
+verify_jwt = false
+
+[functions.invite-codes]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = false
+
+[functions.cartola]
+verify_jwt = false
+
+[functions.guru-valorizacao]
+verify_jwt = false
+
+[functions.sync-sheets]
+verify_jwt = false
+
+[functions.sync-tournament-api]
+verify_jwt = false
+
+[functions.tournament-cron-dispatcher]
+verify_jwt = false

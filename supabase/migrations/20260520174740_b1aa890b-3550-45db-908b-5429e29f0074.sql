@@ -1,0 +1,1 @@
+INSERT INTO tournament_settings (slug, enabled) VALUES ('copa-do-mundo', false) ON CONFLICT (slug) DO NOTHING;

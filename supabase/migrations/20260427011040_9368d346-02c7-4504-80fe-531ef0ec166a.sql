@@ -1,0 +1,1 @@
+DELETE FROM public.user_teams WHERE league = 'copa_mundo';

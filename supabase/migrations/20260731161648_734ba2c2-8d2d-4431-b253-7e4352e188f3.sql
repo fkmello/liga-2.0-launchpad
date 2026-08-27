@@ -1,0 +1,1 @@
+UPDATE public.tournament_sync_state SET second_sync_done = false, first_sync_at = now() - interval '90 minutes' WHERE league = 'brasileirao_serie_a';
