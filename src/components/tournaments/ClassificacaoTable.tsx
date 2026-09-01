@@ -4,6 +4,7 @@ import { useClassificacao, useDadosExternos } from '@/hooks/useGoogleSheets';
 import { Loader2, AlertCircle } from 'lucide-react';
 import LegacyClassificacaoTable from './LegacyClassificacaoTable';
 import StandingsTable from './StandingsTable';
+import { normalizeTeamName, resolveTeamName } from '@/config/teamAliases';
 
 interface ClassificacaoTableProps {
   league?: string;
@@ -22,6 +23,18 @@ const ClassificacaoTable = ({ league = 'serie_a', isUserTeam, statusMercado }: C
   const { data: dadosExternos } = useDadosExternos(league);
   const { finished } = useTournamentFinished(LEAGUE_TO_SLUG[league]);
 
+  // Nomes oficiais (DADOS EXTERNOS) indexados pela forma normalizada
+  const officialNames = useMemo(() => {
+    const mapping: Record<string, string> = {};
+    for (const row of dadosExternos?.rows ?? []) {
+      const name = row[0]?.trim();
+      if (name) mapping[normalizeTeamName(name)] = name;
+    }
+    return mapping;
+  }, [dadosExternos]);
+
+  const canonical = (name: string) => resolveTeamName(name, officialNames);
+
   // Build badge URL mapping from dados externos
   const badgeUrls = useMemo(() => {
     if (!dadosExternos?.rows) return {};
@@ -36,6 +49,24 @@ const ClassificacaoTable = ({ league = 'serie_a', isUserTeam, statusMercado }: C
     }
     return mapping;
   }, [dadosExternos]);
+
+  // Aplica o nome oficial nas linhas vindas da planilha
+  const normalizedStandings = useMemo(
+    () => standings?.map((row) => ({ ...row, teamName: canonical(row.teamName) })),
+    [standings, officialNames],
+  );
+
+  const normalizedLegacy = useMemo(() => {
+    if (!legacy?.data) return legacy;
+    const rows = legacy.data.map((row, idx) => {
+      if (idx < 3 || !row?.[3]) return row;
+      const next = [...row];
+      next[3] = canonical(String(row[3]).trim());
+      return next;
+    });
+    return { ...legacy, data: rows };
+  }, [legacy, officialNames]);
+
 
   if (isLoading) {
     return (
