@@ -86,10 +86,10 @@ const ClassificacaoTable = ({ league = 'serie_a', isUserTeam, statusMercado }: C
     );
   }
 
-  if (standings) {
+  if (normalizedStandings) {
     return (
       <StandingsTable
-        rows={standings}
+        rows={normalizedStandings}
         badgeUrls={badgeUrls}
         league={league}
         finished={finished}
@@ -101,7 +101,7 @@ const ClassificacaoTable = ({ league = 'serie_a', isUserTeam, statusMercado }: C
 
   return (
     <LegacyClassificacaoTable
-      data={legacy}
+      data={normalizedLegacy}
       badgeUrls={badgeUrls}
       league={league}
       finished={finished}
@@ -109,6 +109,7 @@ const ClassificacaoTable = ({ league = 'serie_a', isUserTeam, statusMercado }: C
       statusMercado={statusMercado}
     />
   );
+
 };
 
 export default ClassificacaoTable;
