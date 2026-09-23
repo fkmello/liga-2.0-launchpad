@@ -33,8 +33,12 @@
 
 ## Criação controlada do primeiro Shadow
 
-- Após o código estar válido, executar uma única inicialização persistente para `brasileirao_serie_b`, temporada 2026, usando `scope=dados_externos` — nunca `scope=all`.
-- Esse escopo mantém o baseline completo das 38 rodadas carregado pelo repositório, recalcula a classificação a partir dos confrontos históricos e permite atualizar somente os dados atuais obtidos pela API; nenhuma rodada futura receberá placar inventado.
+- Após o código estar válido, executar primeiro uma simulação sem gravação para `brasileirao_serie_b`, temporada 2026, usando `scope=dados_externos` — nunca `scope=all`.
+- Neste código, `scope=dados_externos` não limita o baseline: o `ShadowRepository.load()` carrega classificação, participantes e R1–R38 do legado. Como o escopo não é `rodada`, o adapter também normaliza todos os confrontos carregados para recalcular a classificação.
+- O adapter ainda consulta o status do mercado. No estado observado (mercado aberto na R29), a rodada-alvo é R28. A inicialização prevê 41 requisições Cartola em três etapas: 1 status, 20 cadastros/escudos e 20 pontuações da R28.
+- Uma pontuação válida da API pode substituir o valor legado da R28; retorno ausente preserva o valor anterior. Antes de persistir, comparar os 10 placares simulados da R28 com o legado.
+- Persistir uma única vez somente se R1–R38 mantiverem confrontos e placares históricos, inclusive R28 sem divergência. Se qualquer placar mudar, parar e relatar sem criar o Shadow.
+- O Shadow aprovado conterá 38 fases, classificação consolidada recalculada, 20 participantes/dados externos e metadados do provider. R29–R38 permanecerão sem placares.
 - A escrita ficará restrita a `shadow/brasileirao_serie_b/2026` por `persistMode: 'shadow'`.
 - Se a validação do payload falhar, nada será persistido. Não haverá escrita nas chaves legadas.
 
