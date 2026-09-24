@@ -14,3 +14,6 @@
  * Nenhum outro torneio é afetado por esta flag.
  */
 export const USE_CONSOLIDATED_SERIE_A = true;
+
+/** Série B preparada no Shadow, mas ainda mantida integralmente no legado. */
+export const USE_CONSOLIDATED_SERIE_B = false;

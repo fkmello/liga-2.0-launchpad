@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { USE_CONSOLIDATED_SERIE_A } from '@/config/featureFlags';
+import {
+  USE_CONSOLIDATED_SERIE_A,
+  USE_CONSOLIDATED_SERIE_B,
+} from '@/config/featureFlags';
 import { DEFAULT_SEASON, getTournamentCacheKey } from '@/config/tournamentCacheKeys';
 import { callEdgeFunction, fetchManyFromCache } from '@/lib/sheetsCache';
 import type {
@@ -22,9 +25,12 @@ export const TOURNAMENT_PAYLOAD_QUERY_KEY = 'tournament-payload';
 
 const TOTAL_ROUNDS = 38;
 
-/** Somente a Série A, e somente com a flag ligada, usa o contrato consolidado. */
+/** Cada série só usa o contrato consolidado quando sua própria flag está ligada. */
 export function isConsolidatedTournament(league: string): boolean {
-  return USE_CONSOLIDATED_SERIE_A && league === 'serie_a';
+  return (
+    (USE_CONSOLIDATED_SERIE_A && league === 'serie_a') ||
+    (USE_CONSOLIDATED_SERIE_B && league === 'serie_b')
+  );
 }
 
 export function useTournamentPayload(league: string, season: number = DEFAULT_SEASON) {

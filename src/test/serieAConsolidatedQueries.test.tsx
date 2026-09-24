@@ -55,9 +55,12 @@ function Harness({ league }: { league: string }) {
 
 let hooks: typeof import('@/hooks/useGoogleSheets');
 
-async function loadHooks(flag: boolean) {
+async function loadHooks(flag: boolean, serieBFlag = false) {
   vi.resetModules();
-  vi.doMock('@/config/featureFlags', () => ({ USE_CONSOLIDATED_SERIE_A: flag }));
+  vi.doMock('@/config/featureFlags', () => ({
+    USE_CONSOLIDATED_SERIE_A: flag,
+    USE_CONSOLIDATED_SERIE_B: serieBFlag,
+  }));
   hooks = await import('@/hooks/useGoogleSheets');
 }
 
@@ -114,5 +117,13 @@ describe('Série A — leituras de sheets_cache por carregamento', () => {
       'dados_externos:serie_b',
       'resultados:serie_b:21',
     ]);
+  });
+
+  it('flag B simulada lê somente o Shadow próprio da Série B', async () => {
+    await loadHooks(true, true);
+    renderHarness('serie_b');
+    await settle();
+    expect(selectCalls).toHaveLength(1);
+    expect(selectCalls[0].keys).toEqual(['shadow/brasileirao_serie_b/2026']);
   });
 });
