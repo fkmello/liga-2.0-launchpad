@@ -3,13 +3,31 @@ import { shadowKey, isShadowKey } from '../../supabase/functions/_shared/cache/s
 import { resolveCompareStatus } from '../../supabase/functions/_shared/cache/compareStatus.ts';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader.ts';
 import { buildCoverageReport } from '../../supabase/functions/_shared/sync/validation/coverage.ts';
+import {
+  listTournaments,
+  resolveDefinition,
+} from '../../supabase/functions/_shared/tournament/registry.ts';
 
 describe('shadow keys', () => {
   it('usa a mesma convenção para qualquer torneio', () => {
     expect(shadowKey('brasileirao_serie_a', 2026)).toBe('shadow/brasileirao_serie_a/2026');
+    expect(shadowKey('brasileirao_serie_b', 2026)).toBe('shadow/brasileirao_serie_b/2026');
     expect(shadowKey('copa_mundo', 2026)).toBe('shadow/copa_mundo/2026');
     expect(shadowKey('champions', '2026_27')).toBe('shadow/champions/2026_27');
     expect(isShadowKey(shadowKey('libertadores', 2026))).toBe(true);
+  });
+
+  it('registra a Série B isoladamente, com cron desativado', () => {
+    const { def, season } = resolveDefinition('brasileirao_serie_b');
+    expect(season).toBe(2026);
+    expect(def.league).toBe('brasileirao_serie_b');
+    expect(def.persistMode).toBe('shadow');
+    expect(def.cron?.enabled).toBe(false);
+    expect(def.adapters.map((adapter) => adapter.id)).toEqual([
+      'cartola_brasileirao_serie_b_v1',
+    ]);
+    expect(listTournaments()).toContain('brasileirao_serie_a');
+    expect(listTournaments()).toContain('brasileirao_serie_b');
   });
 });
 
@@ -58,6 +76,27 @@ describe('LegacyCacheReader', () => {
   it('retorna null quando não há nada no legado', async () => {
     const payload = await readLegacyTournament('brasileirao_serie_b', 2026, async () => null);
     expect(payload).toBeNull();
+  });
+
+  it('consolida o baseline multi-chave da Série B', async () => {
+    const store: Record<string, any> = {
+      'classificacao:serie_b': {
+        data: [['', '1', '', 'Time B', '3', '1', '1']],
+      },
+      'dados_externos:serie_b': { rows: [['Time B', '202']] },
+      'resultados:serie_b:1': {
+        round: '1',
+        matches: [{ team1: 'Time B', team2: 'Time C', score1: '2', score2: '1' }],
+      },
+    };
+    const payload = await readLegacyTournament(
+      'brasileirao_serie_b',
+      2026,
+      async (key) => store[key] ?? null,
+    );
+    expect(payload?.fases.rodada_1).toBeTruthy();
+    expect(payload?.dados_externos.rows).toHaveLength(1);
+    expect(payload?.classificacao.grupos.geral).toHaveLength(1);
   });
 });
 

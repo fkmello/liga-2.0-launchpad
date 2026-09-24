@@ -134,8 +134,11 @@ function extractMatches(
   return { matches, fases };
 }
 
-export const cartolaBrasileiraoAdapter: TournamentAdapter<BrasileiraoRaw> = {
-  id: 'cartola_brasileirao_serie_a_v1',
+export function createCartolaBrasileiraoAdapter(
+  id: string,
+): TournamentAdapter<BrasileiraoRaw> {
+  return {
+  id,
   provider: KnownProviders.CARTOLA_BRASILEIRAO,
   source_type: 'api',
 
@@ -187,4 +190,9 @@ export const cartolaBrasileiraoAdapter: TournamentAdapter<BrasileiraoRaw> = {
   toMatches(raw) {
     return raw.matches;
   },
-};
+  };
+}
+
+export const cartolaBrasileiraoAdapter = createCartolaBrasileiraoAdapter(
+  'cartola_brasileirao_serie_a_v1',
+);
