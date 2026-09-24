@@ -62,16 +62,20 @@ Deno.serve(async (req) => {
       return json({ error: 'Simulação falhou', dry_run: dry }, 409);
     }
 
+    const roundKeys = Array.from({ length: 38 }, (_, index) => `resultados:serie_b:${index + 1}`);
+    const { data: legacyRows, error: legacyError } = await db
+      .from('sheets_cache')
+      .select('cache_key,data')
+      .in('cache_key', roundKeys);
+    if (legacyError) return json({ error: legacyError.message }, 500);
+    const legacyByKey = new Map(
+      (legacyRows ?? []).map((row: { cache_key: string; data: unknown }) => [row.cache_key, row.data]),
+    );
+
     const rounds = [];
     let safe = true;
     for (let round = 1; round <= 38; round++) {
-      const { data: legacyRow, error } = await db
-        .from('sheets_cache')
-        .select('data')
-        .eq('cache_key', `resultados:serie_b:${round}`)
-        .maybeSingle();
-      if (error) return json({ error: error.message }, 500);
-      const legacy = legacyRow?.data ?? null;
+      const legacy = legacyByKey.get(`resultados:serie_b:${round}`) ?? null;
       const proposed = dry.payload.fases?.[`rodada_${round}`] ?? null;
       const identical = sameMatches(legacy, proposed);
       const futureFilled =
@@ -93,6 +97,20 @@ Deno.serve(async (req) => {
         rounds,
         standings_divergences: dry.standings_divergences ?? [],
       }, 409);
+    }
+
+    const mode = new URL(req.url).searchParams.get('mode') ?? 'dry-run';
+    if (mode !== 'persist') {
+      return json({
+        ok: true,
+        cache_key: SHADOW_KEY,
+        scope: 'dados_externos',
+        rounds,
+        standings_divergences: dry.standings_divergences ?? [],
+        coverage: dry.coverage ?? null,
+        persisted: false,
+        safe_to_persist: true,
+      });
     }
 
     const persistUrl =
