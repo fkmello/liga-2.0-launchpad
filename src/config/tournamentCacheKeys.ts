@@ -18,6 +18,7 @@ type Stage = 'shadow' | 'official';
 const BACKEND_LEAGUE_ID: Record<string, string> = {
   serie_a: 'brasileirao_serie_a',
   serie_b: 'brasileirao_serie_b',
+  serie_c: 'brasileirao_serie_c',
 };
 
 /**
@@ -27,6 +28,7 @@ const BACKEND_LEAGUE_ID: Record<string, string> = {
 const STAGE_BY_LEAGUE: Record<string, Stage> = {
   serie_a: 'shadow',
   serie_b: 'shadow',
+  serie_c: 'shadow',
 };
 
 export function getTournamentCacheKey(league: string, season: number | string): string {
