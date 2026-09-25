@@ -27,7 +27,7 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     cacheKey: (season) => `brasileirao_serie_c:${season}`, cacheType: 'brasileirao_serie_c', version: 1, schema_version: 1,
     standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaBrasileiraoSerieCAdapter], adapterPrecedence: { cartola_brasileirao_serie_c_v1: 10 },
     cron: {
-      enabled: false,
+      enabled: true,
       statusProvider: 'cartola',
       firstSyncDelayMinutes: 15,
       firstSyncWindowMinutes: 30,
