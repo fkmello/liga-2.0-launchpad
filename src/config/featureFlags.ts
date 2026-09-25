@@ -15,5 +15,5 @@
  */
 export const USE_CONSOLIDATED_SERIE_A = true;
 
-/** Série B preparada no Shadow, mas ainda mantida integralmente no legado. */
-export const USE_CONSOLIDATED_SERIE_B = false;
+/** Série B preparada no Shadow e agora ativada apenas para leitura no frontend. */
+export const USE_CONSOLIDATED_SERIE_B = true;
