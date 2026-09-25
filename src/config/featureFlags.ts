@@ -17,3 +17,7 @@ export const USE_CONSOLIDATED_SERIE_A = true;
 
 /** Série B preparada no Shadow e agora ativada apenas para leitura no frontend. */
 export const USE_CONSOLIDATED_SERIE_B = true;
+
+
+/** Série C preparada para migração; permanece no legado até a validação do Shadow. */
+export const USE_CONSOLIDATED_SERIE_C = false;
