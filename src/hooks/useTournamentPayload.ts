@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   USE_CONSOLIDATED_SERIE_A,
   USE_CONSOLIDATED_SERIE_B,
+  USE_CONSOLIDATED_SERIE_C,
 } from '@/config/featureFlags';
 import { DEFAULT_SEASON, getTournamentCacheKey } from '@/config/tournamentCacheKeys';
 import { callEdgeFunction, fetchManyFromCache } from '@/lib/sheetsCache';
@@ -29,7 +30,8 @@ const TOTAL_ROUNDS = 38;
 export function isConsolidatedTournament(league: string): boolean {
   return (
     (USE_CONSOLIDATED_SERIE_A && league === 'serie_a') ||
-    (USE_CONSOLIDATED_SERIE_B && league === 'serie_b')
+    (USE_CONSOLIDATED_SERIE_B && league === 'serie_b') ||
+    (USE_CONSOLIDATED_SERIE_C && league === 'serie_c')
   );
 }
 
