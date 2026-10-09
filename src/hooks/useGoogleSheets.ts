@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchFromCache, fetchWithFallback } from '@/lib/sheetsCache';
 import { isConsolidatedTournament, useTournamentPayload } from '@/hooks/useTournamentPayload';
 import type { StandingRow } from '@/types/tournament';
+import { USE_COPA_BRASIL_SHADOW_READ } from '@/config/featureFlags';
+import { getCopaBrasilShadowPhase, getCopaBrasilShadowRows } from '@/lib/copaBrasilShadow';
 
 
 export interface Confronto {
@@ -202,24 +204,41 @@ export function useClassificacao(league: string = 'serie_a'): ClassificacaoResul
 
 export function useBaseDadosCopa(fase: string = '1ª Fase') {
   return useQuery<DadosExternosData>({
-    queryKey: ['base-dados-copa', fase],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'copa:brasil',
-      { action: 'base_dados_copa', fase },
-      (d) => d?.dados_externos
-    ),
+    queryKey: ['base-dados-copa', fase, USE_COPA_BRASIL_SHADOW_READ],
+    queryFn: async () => {
+      if (USE_COPA_BRASIL_SHADOW_READ) {
+        const shadow = await fetchFromCache<unknown>(`shadow/copa_brasil/${new Date().getFullYear()}`);
+        const rows = getCopaBrasilShadowRows(shadow);
+        if (rows) {
+          // Preserve the existing component contract while reading normalized API rows.
+          return { headers: [], rows, raw: rows };
+        }
+      }
+      return fetchWithFallback<DadosExternosData>(
+        'copa:brasil',
+        { action: 'base_dados_copa', fase },
+        (d) => d?.dados_externos
+      );
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
 
 export function useConfrontosCopa(fase: string) {
   return useQuery<ConfrontosCopaData>({
-    queryKey: ['confrontos-copa', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'copa:brasil',
-      { action: 'confrontos_copa', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryKey: ['confrontos-copa', fase, USE_COPA_BRASIL_SHADOW_READ],
+    queryFn: async () => {
+      if (USE_COPA_BRASIL_SHADOW_READ) {
+        const shadow = await fetchFromCache<unknown>(`shadow/copa_brasil/${new Date().getFullYear()}`);
+        const phase = getCopaBrasilShadowPhase(shadow, fase);
+        if (phase) return phase as unknown as ConfrontosCopaData;
+      }
+      return fetchWithFallback<ConfrontosCopaData>(
+        'copa:brasil',
+        { action: 'confrontos_copa', fase },
+        (d) => d?.fases?.[fase]
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
