@@ -168,7 +168,7 @@ const CupMatchCard = ({
       <div className="w-6 h-6 mx-1 shrink-0 flex items-center justify-center">
         {badge && (
           <img src={badge} alt={teamName} className="w-5 h-5 object-contain"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            onError={(e) => { const img = e.currentTarget; const current = img.getAttribute('src') || img.src; const fallback = getBadgeOriginFallback(current); if (fallback && fallback !== current) img.setAttribute('src', fallback); else img.style.display = 'none'; }} />
         )}
       </div>
       {showPartials && playedCount !== undefined && (
