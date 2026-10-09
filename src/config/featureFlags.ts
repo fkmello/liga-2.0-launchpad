@@ -21,3 +21,6 @@ export const USE_CONSOLIDATED_SERIE_B = true;
 
 /** Série C preparada no Shadow e agora ativada para leitura consolidada no frontend. */
 export const USE_CONSOLIDATED_SERIE_C = true;
+
+/** Copa do Brasil: read the API-backed shadow cache only after explicit frontend validation. */
+export const USE_COPA_BRASIL_SHADOW_READ = false;
