@@ -103,6 +103,7 @@ function parseClassificacaoMatrix(raw: any): unknown[] {
  * Adicionar um torneio = adicionar uma entrada aqui.
  */
 export const LEGACY_STRATEGIES: Record<string, LegacyStrategy> = {
+  copa_brasil: singleKeyStrategy(() => 'copa:brasil'),
   copa_mundo: singleKeyStrategy((ctx) =>
     String(ctx.season) === '2026' ? 'copa_mundo' : `copa_mundo:${ctx.season}`,
   ),

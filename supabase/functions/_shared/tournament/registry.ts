@@ -1,5 +1,6 @@
 import type { TournamentAdapter, TournamentDefinition } from './types.ts';
 import { cartolaCopaAdapter } from '../providers/cartola-copa/adapter.ts';
+import { cartolaCopaBrasilAdapter } from '../providers/cartola-brasileirao/adapter-copa-brasil.ts';
 import { cartolaBrasileiraoAdapter } from '../providers/cartola-brasileirao/adapter.ts';
 import { cartolaBrasileiraoSerieBAdapter } from '../providers/cartola-brasileirao/adapter-serie-b.ts';
 import { cartolaBrasileiraoSerieCAdapter } from '../providers/cartola-brasileirao/adapter-serie-c.ts';
@@ -15,6 +16,14 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     version: 1, schema_version: 1, standingsPreset: 'FIFA', mergeableKeys: ['fases.fase_grupos'], adapters: [cartolaCopaAdapter],
     adapterPrecedence: { cartola_copa_v1: 10 },
     cron: { enabled: true, statusProvider: 'cartola_copa', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+  },
+  copa_brasil: {
+    league: 'copa_brasil', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
+    cacheKey: (season) => `copa_brasil:${season}`, cacheType: 'copa_brasil', version: 1, schema_version: 1,
+    standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaCopaBrasilAdapter],
+    adapterPrecedence: { cartola_brasileirao_copa_brasil_v1: 10 },
+    // Cron permanece desabilitado até validarmos o dry-run e o shadow payload.
+    cron: { enabled: false, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
   },
   brasileirao_serie_a: {
     league: 'brasileirao_serie_a', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',

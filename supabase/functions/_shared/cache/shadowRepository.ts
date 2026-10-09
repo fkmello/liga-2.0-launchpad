@@ -3,7 +3,7 @@ import type { TournamentCachePayload } from '../tournament/types.ts';
 import { diffPayloads, type CacheComparison } from './diff.ts';
 import { readLegacyTournament, type LegacyKeyReader } from './legacy/reader.ts';
 import { shadowKey } from './shadowKeys.ts';
-import { mergeFasesPreservingScores } from './roundPreservation.ts';
+import { mergeCopaBrasilFasesPreservingScores, mergeFasesPreservingScores } from './roundPreservation.ts';
 
 /**
  * Repositório genérico de shadow mode:
@@ -46,7 +46,7 @@ export function createShadowRepository(opts: {
 
       return {
         ...shadow,
-        fases: mergeFasesPreservingScores(legacy.fases, shadow.fases),
+        fases: mergeForLeague(opts.league, legacy.fases, shadow.fases),
         classificacao: hasGrupos(shadow) ? shadow.classificacao : legacy.classificacao,
         dados_externos: (shadow.dados_externos?.rows ?? []).length
           ? shadow.dados_externos
@@ -68,7 +68,7 @@ export function createShadowRepository(opts: {
 
       // Trava final: nenhuma rodada já consolidada pode ser gravada vazia.
       const safePayload: TournamentCachePayload = current
-        ? { ...payload, fases: mergeFasesPreservingScores(current.fases, payload.fases) }
+        ? { ...payload, fases: mergeForLeague(opts.league, current.fases, payload.fases) }
         : payload;
 
       const currentHash = current?.metadata?.hash;
@@ -104,4 +104,16 @@ function isUsableShadow(payload: TournamentCachePayload | null): boolean {
   const grupos = Object.keys(payload.classificacao?.grupos ?? {}).length;
   const rows = (payload.dados_externos?.rows ?? []).length;
   return fases + grupos + rows > 0;
+}
+
+
+/** Usa a lógica reforçada somente na Copa do Brasil; mantém as Séries A/B/C intactas. */
+function mergeForLeague(
+  league: string,
+  prev: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  return league === 'copa_brasil'
+    ? mergeCopaBrasilFasesPreservingScores(prev, next)
+    : mergeFasesPreservingScores(prev, next);
 }
