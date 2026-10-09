@@ -22,8 +22,8 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     cacheKey: (season) => `copa_brasil:${season}`, cacheType: 'copa_brasil', version: 1, schema_version: 1,
     standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaCopaBrasilAdapter],
     adapterPrecedence: { cartola_brasileirao_copa_brasil_v1: 10 },
-    // Cron permanece desabilitado até validarmos o dry-run e o shadow payload.
-    cron: { enabled: false, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+    // Ativação preparada após validação do payload shadow; sem escrita na cache oficial.
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
   },
   brasileirao_serie_a: {
     league: 'brasileirao_serie_a', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
