@@ -42,20 +42,20 @@ describe('Copa do Brasil adapter', () => {
 
   it('mapeia todas as 11 rodadas de referência para fase e perna corretas', () => {
     const cases = [
-      [5, '1ª Fase', 'scoreIda1'],
-      [7, '1ª Fase', 'scoreVolta1'],
-      [13, '2ª Fase', 'scoreIda1'],
-      [16, '2ª Fase', 'scoreVolta1'],
-      [21, 'Oitavas de Final', 'scoreIda1'],
-      [22, 'Oitavas de Final', 'scoreVolta1'],
-      [25, 'Quartas de Final', 'scoreIda1'],
-      [26, 'Quartas de Final', 'scoreVolta1'],
-      [34, 'Semifinal', 'scoreIda1'],
-      [35, 'Semifinal', 'scoreVolta1'],
-      [38, 'Final', 'scoreIda1'],
+      [5, '1ª Fase', 'scoreIda1', 'scoreIda2'],
+      [7, '1ª Fase', 'scoreVolta1', 'scoreVolta2'],
+      [13, '2ª Fase', 'scoreIda1', 'scoreIda2'],
+      [16, '2ª Fase', 'scoreVolta1', 'scoreVolta2'],
+      [21, 'Oitavas de Final', 'scoreIda1', 'scoreIda2'],
+      [22, 'Oitavas de Final', 'scoreVolta1', 'scoreVolta2'],
+      [25, 'Quartas de Final', 'scoreIda1', 'scoreIda2'],
+      [26, 'Quartas de Final', 'scoreVolta1', 'scoreVolta2'],
+      [34, 'Semifinal', 'scoreIda1', 'scoreIda2'],
+      [35, 'Semifinal', 'scoreVolta1', 'scoreVolta2'],
+      [38, 'Final', 'scoreIda1', 'scoreIda2'],
     ] as const;
 
-    for (const [round, phase, scoreField] of cases) {
+    for (const [round, phase, scoreField1, scoreField2] of cases) {
       const fases = {
         [phase]: {
           matches: [{ team1: 'Time A', team2: 'Time B', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' }],
@@ -68,15 +68,12 @@ describe('Copa do Brasil adapter', () => {
         idByName,
       );
       const match = result[phase].matches?.[0];
-      expect(match[scoreField]).toBe('71,25');
-      const untouched = ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']
-        .filter((field) => field !== scoreField && field !== (scoreField === 'scoreIda1' ? 'scoreIda2' : scoreField === 'scoreVolta1' ? 'scoreVolta2' : ''));
-      for (const field of untouched) {
-        if (field === 'scoreIda1' || field === 'scoreIda2' || field === 'scoreVolta1' || field === 'scoreVolta2') {
-          if (field !== scoreField && field !== (scoreField === 'scoreIda1' ? 'scoreIda2' : scoreField === 'scoreVolta1' ? 'scoreVolta2' : '')) {
-            expect(match[field]).toBe('');
-          }
-        }
+      expect(match[scoreField1]).toBe('71,25');
+      expect(match[scoreField2]).toBe('62,50');
+      const untouchedFields = ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']
+        .filter((field) => field !== scoreField1 && field !== scoreField2);
+      for (const field of untouchedFields) {
+        expect(match[field]).toBe('');
       }
     }
   });
@@ -136,6 +133,31 @@ describe('Copa do Brasil adapter', () => {
     expect(matches[0].scoreIda2).toBe('45,00');
     expect(matches[1].scoreIda1).toBe('70,00');
     expect(matches[1].scoreIda2).toBe('60,00');
+  });
+
+  it('mescla a volta mesmo quando uma partida ainda não tem pontuação', () => {
+    const prev = {
+      '1ª Fase': {
+        matches: [
+          { team1: 'Time A', team2: 'Time B', scoreIda1: '70,00', scoreIda2: '60,00', scoreVolta1: '', scoreVolta2: '' },
+          { team1: 'Time C', team2: 'Time D', scoreIda1: '55,00', scoreIda2: '45,00', scoreVolta1: '', scoreVolta2: '' },
+        ],
+      },
+    };
+    const next = {
+      '1ª Fase': {
+        matches: [
+          { team1: 'Time A', team2: 'Time B', scoreIda1: '70,00', scoreIda2: '60,00', scoreVolta1: '80,00', scoreVolta2: '75,00' },
+          { team1: 'Time C', team2: 'Time D', scoreIda1: '55,00', scoreIda2: '45,00', scoreVolta1: '', scoreVolta2: '' },
+        ],
+      },
+    };
+    const merged = mergeFasesPreservingScores(prev, next);
+    const matches = (merged['1ª Fase'] as any).matches;
+    expect(matches[0].scoreVolta1).toBe('80,00');
+    expect(matches[0].scoreVolta2).toBe('75,00');
+    expect(matches[1].scoreIda1).toBe('55,00');
+    expect(matches[1].scoreIda2).toBe('45,00');
   });
 
   it('não transfere placares por índice quando não existe identidade de confronto', () => {
