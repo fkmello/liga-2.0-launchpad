@@ -1,5 +1,6 @@
 import { ConfrontoCopa } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
+import { getBadgeOriginFallback } from '@/lib/copaBrasilBadge';
 
 interface CupMatchCardProps {
   match: ConfrontoCopa;
@@ -94,7 +95,7 @@ const CupMatchCard = ({
           <div className="w-10 h-10 flex items-center justify-center">
             {badge ? (
               <img src={badge} alt={teamName} className="w-10 h-10 object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                onError={(e) => { const img = e.currentTarget; const current = img.getAttribute('src') || img.src; const fallback = getBadgeOriginFallback(current); if (fallback && fallback !== current) img.setAttribute('src', fallback); else img.style.display = 'none'; }} />
             ) : (
               <div className="w-10 h-10" />
             )}
