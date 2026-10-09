@@ -13,8 +13,14 @@ const SCORE_FIELDS = ['score1', 'score2', 'scoreIda1', 'scoreIda2', 'scoreVolta1
 function matchIdentity(match: Record<string, any>): string | null {
   // Prioriza os dois times: matchNumber pode continuar igual mesmo se o
   // confronto de um slot mudar após avanço de fase. Nunca associa por índice.
-  const team1 = String(match.team1 ?? match.home ?? '').trim().toLowerCase();
-  const team2 = String(match.team2 ?? match.away ?? '').trim().toLowerCase();
+  const normalizeTeam = (value: unknown) => String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '')
+    .trim()
+    .replace(/\\s+/g, ' ')
+    .toLowerCase();
+  const team1 = normalizeTeam(match.team1 ?? match.home);
+  const team2 = normalizeTeam(match.team2 ?? match.away);
   if (team1 && team2) return 'teams:' + team1 + '::' + team2;
   const number = String(match.matchNumber ?? match.matchOrder ?? '').trim();
   return number ? 'number:' + number : null;
@@ -32,21 +38,35 @@ function mergePhaseMatchesPreservingScores(prev: unknown, next: unknown): unknow
     if (identity) previousByIdentity.set(identity, match);
   });
 
+  const nextIdentities = new Set<string>();
+  const mergedMatches = nextMatches.map((match: Record<string, any>) => {
+    const identity = matchIdentity(match);
+    if (identity) nextIdentities.add(identity);
+    const previous = identity ? previousByIdentity.get(identity) : undefined;
+    if (!previous) return match;
+    const merged = { ...previous, ...match };
+    for (const field of SCORE_FIELDS) {
+      if (!isFilled(match?.[field]) && isFilled(previous?.[field])) {
+        merged[field] = previous[field];
+      }
+    }
+    return merged;
+  });
+
+  // Se o payload novo vier incompleto, não descarte confrontos anteriores
+  // que já têm placares; nunca tente reassociá-los por posição.
+  for (const previous of prevMatches as Record<string, any>[]) {
+    const identity = matchIdentity(previous);
+    const hasScores = SCORE_FIELDS.some((field) => isFilled(previous?.[field]));
+    if (hasScores && identity && !nextIdentities.has(identity)) {
+      mergedMatches.push(previous);
+    }
+  }
+
   return {
     ...(prev as Fase),
     ...(next as Fase),
-    matches: nextMatches.map((match: Record<string, any>) => {
-      const identity = matchIdentity(match);
-      const previous = identity ? previousByIdentity.get(identity) : undefined;
-      if (!previous) return match;
-      const merged = { ...previous, ...match };
-      for (const field of SCORE_FIELDS) {
-        if (!isFilled(match?.[field]) && isFilled(previous?.[field])) {
-          merged[field] = previous[field];
-        }
-      }
-      return merged;
-    }),
+    matches: mergedMatches,
   };
 }
 
@@ -87,16 +107,8 @@ export function mergeFasesPreservingScores(
 
   for (const key of Object.keys(a)) {
     if (!(key in b)) continue;
-    const prevScored = countScoredMatches(a[key]);
-    const nextScored = countScoredMatches(b[key]);
-    if (prevScored > nextScored) {
-      out[key] = a[key];
-      continue;
-    }
-    if (prevScored === nextScored && countMatches(a[key]) > countMatches(b[key])) {
-      out[key] = a[key];
-      continue;
-    }
+    // Sempre faz merge campo a campo: comparar só a quantidade de confrontos
+    // pontuados impediria gravar a volta se uma única partida ainda não tivesse score.
     out[key] = mergePhaseMatchesPreservingScores(a[key], b[key]);
   }
   return out;
