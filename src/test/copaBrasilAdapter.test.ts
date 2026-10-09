@@ -168,12 +168,12 @@ describe('Copa do Brasil adapter', () => {
     expect((merged.fase as any).matches[0].scoreIda2).toBe('');
   });
 
-  it('registra o torneio em shadow e mantém o cron desativado', () => {
+  it('registra o torneio em shadow e habilita o cron automático', () => {
     const { def, season } = resolveDefinition('copa_brasil');
     expect(season).toBe(2026);
     expect(def.persistMode).toBe('shadow');
     expect(def.activeSync).toBe('api');
-    expect(def.cron?.enabled).toBe(false);
+    expect(def.cron?.enabled).toBe(true);
     expect(selectAdapters(def).map((adapter) => adapter.id)).toEqual([
       'cartola_brasileirao_copa_brasil_v1',
     ]);
