@@ -528,6 +528,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let noStoreHeaders: Record<string, string> = {};
   try {
     const url = new URL(req.url);
     const idCartola = url.searchParams.get('id_cartola');
@@ -536,7 +537,7 @@ Deno.serve(async (req) => {
 
     const torneio = url.searchParams.get('torneio');
     const nocache = url.searchParams.get('nocache') === '1';
-    const noStoreHeaders: Record<string, string> = nocache
+    noStoreHeaders = nocache
       ? { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' }
       : {};
 
