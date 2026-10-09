@@ -15,9 +15,9 @@ function matchIdentity(match: Record<string, any>): string | null {
   // confronto de um slot mudar após avanço de fase. Nunca associa por índice.
   const normalizeTeam = (value: unknown) => String(value ?? '')
     .normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .toLowerCase();
   const team1 = normalizeTeam(match.team1 ?? match.home);
   const team2 = normalizeTeam(match.team2 ?? match.away);
