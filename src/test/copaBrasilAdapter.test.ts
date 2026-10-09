@@ -33,7 +33,7 @@ describe('Copa do Brasil adapter', () => {
       new Map<string, number | null>([['101', 77.25], ['102', 66.5]]),
       idByName,
     );
-    const match = result['1ª Fase'].matches[0];
+    const match = result['1ª Fase'].matches?.[0];
     expect(match.scoreIda1).toBe('77,25');
     expect(match.scoreIda2).toBe('66,50');
     expect(match.scoreVolta1).toBe('35,00');
@@ -47,7 +47,7 @@ describe('Copa do Brasil adapter', () => {
       new Map<string, number | null>([['101', null], ['102', null]]),
       idByName,
     );
-    expect(result['1ª Fase'].matches[0]).toEqual(initialFases['1ª Fase'].matches[0]);
+    expect(result['1ª Fase'].matches?.[0]).toEqual(initialFases['1ª Fase'].matches[0]);
   });
 
   it('não altera fases quando a rodada não pertence à Copa do Brasil', () => {
