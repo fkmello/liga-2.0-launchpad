@@ -8,6 +8,44 @@
 
 type Fase = Record<string, any>;
 
+const SCORE_FIELDS = ['score1', 'score2', 'scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2'];
+
+function matchIdentity(match: Record<string, any>, index: number): string {
+  const number = String(match.matchNumber ?? match.matchOrder ?? '').trim();
+  if (number) return 'number:' + number;
+  const team1 = String(match.team1 ?? match.home ?? '').trim().toLowerCase();
+  const team2 = String(match.team2 ?? match.away ?? '').trim().toLowerCase();
+  return team1 && team2 ? 'teams:' + team1 + '::' + team2 : 'index:' + index;
+}
+
+/** Merge campo a campo para que um payload parcial não apague placares antigos. */
+function mergePhaseMatchesPreservingScores(prev: unknown, next: unknown): unknown {
+  const prevMatches = (prev as Fase | undefined)?.matches;
+  const nextMatches = (next as Fase | undefined)?.matches;
+  if (!Array.isArray(prevMatches) || !Array.isArray(nextMatches)) return next;
+
+  const previousByIdentity = new Map<string, Record<string, any>>();
+  prevMatches.forEach((match: Record<string, any>, index: number) => {
+    previousByIdentity.set(matchIdentity(match, index), match);
+  });
+
+  return {
+    ...(prev as Fase),
+    ...(next as Fase),
+    matches: nextMatches.map((match: Record<string, any>, index: number) => {
+      const previous = previousByIdentity.get(matchIdentity(match, index)) ?? prevMatches[index];
+      if (!previous) return match;
+      const merged = { ...previous, ...match };
+      for (const field of SCORE_FIELDS) {
+        if (!isFilled(match?.[field]) && isFilled(previous?.[field])) {
+          merged[field] = previous[field];
+        }
+      }
+      return merged;
+    }),
+  };
+}
+
 function isFilled(value: unknown): boolean {
   return value !== null && value !== undefined && String(value).trim() !== '';
 }
@@ -48,7 +86,9 @@ export function mergeFasesPreservingScores(
     }
     if (prevScored === nextScored && countMatches(a[key]) > countMatches(b[key])) {
       out[key] = a[key];
+      continue;
     }
+    out[key] = mergePhaseMatchesPreservingScores(a[key], b[key]);
   }
   return out;
 }
