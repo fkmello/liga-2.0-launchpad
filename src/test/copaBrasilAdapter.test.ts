@@ -40,6 +40,47 @@ describe('Copa do Brasil adapter', () => {
     expect(match.scoreVolta2).toBe('30,00');
   });
 
+  it('mapeia todas as 11 rodadas de referência para fase e perna corretas', () => {
+    const cases = [
+      [5, '1ª Fase', 'scoreIda1'],
+      [7, '1ª Fase', 'scoreVolta1'],
+      [13, '2ª Fase', 'scoreIda1'],
+      [16, '2ª Fase', 'scoreVolta1'],
+      [21, 'Oitavas de Final', 'scoreIda1'],
+      [22, 'Oitavas de Final', 'scoreVolta1'],
+      [25, 'Quartas de Final', 'scoreIda1'],
+      [26, 'Quartas de Final', 'scoreVolta1'],
+      [34, 'Semifinal', 'scoreIda1'],
+      [35, 'Semifinal', 'scoreVolta1'],
+      [38, 'Final', 'scoreIda1'],
+    ] as const;
+
+    for (const [round, phase, scoreField] of cases) {
+      const fases = {
+        [phase]: {
+          matches: [{ team1: 'Time A', team2: 'Time B', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' }],
+        },
+      };
+      const result = updateCopaBrasilFases(
+        fases,
+        round,
+        new Map<string, number | null>([['101', 71.25], ['102', 62.5]]),
+        idByName,
+      );
+      const match = result[phase].matches?.[0];
+      expect(match[scoreField]).toBe('71,25');
+      const untouched = ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']
+        .filter((field) => field !== scoreField && field !== (scoreField === 'scoreIda1' ? 'scoreIda2' : scoreField === 'scoreVolta1' ? 'scoreVolta2' : ''));
+      for (const field of untouched) {
+        if (field === 'scoreIda1' || field === 'scoreIda2' || field === 'scoreVolta1' || field === 'scoreVolta2') {
+          if (field !== scoreField && field !== (scoreField === 'scoreIda1' ? 'scoreIda2' : scoreField === 'scoreVolta1' ? 'scoreVolta2' : '')) {
+            expect(match[field]).toBe('');
+          }
+        }
+      }
+    }
+  });
+
   it('preserva os placares anteriores quando a API não retorna pontuação', () => {
     const result = updateCopaBrasilFases(
       initialFases,
@@ -70,6 +111,39 @@ describe('Copa do Brasil adapter', () => {
       { '1ª Fase': emptyPhase },
     );
     expect((merged['1ª Fase'] as any).matches[0]).toEqual(initialFases['1ª Fase'].matches[0]);
+  });
+
+  it('preserva os placares do confronto correto quando a ordem muda', () => {
+    const prev = {
+      '1ª Fase': {
+        matches: [
+          { team1: 'Time A', team2: 'Time B', matchNumber: '1', scoreIda1: '70,00', scoreIda2: '60,00' },
+          { team1: 'Time C', team2: 'Time D', matchNumber: '2', scoreIda1: '55,00', scoreIda2: '45,00' },
+        ],
+      },
+    };
+    const next = {
+      '1ª Fase': {
+        matches: [
+          { team1: 'Time C', team2: 'Time D', matchNumber: '2', scoreIda1: '', scoreIda2: '' },
+          { team1: 'Time A', team2: 'Time B', matchNumber: '1', scoreIda1: '', scoreIda2: '' },
+        ],
+      },
+    };
+    const merged = mergeFasesPreservingScores(prev, next);
+    const matches = (merged['1ª Fase'] as any).matches;
+    expect(matches[0].scoreIda1).toBe('55,00');
+    expect(matches[0].scoreIda2).toBe('45,00');
+    expect(matches[1].scoreIda1).toBe('70,00');
+    expect(matches[1].scoreIda2).toBe('60,00');
+  });
+
+  it('não transfere placares por índice quando não existe identidade de confronto', () => {
+    const prev = { fase: { matches: [{ scoreIda1: '70,00', scoreIda2: '60,00' }] } };
+    const next = { fase: { matches: [{ team1: 'Time Novo', team2: 'Outro Time', scoreIda1: '', scoreIda2: '' }] } };
+    const merged = mergeFasesPreservingScores(prev, next);
+    expect((merged.fase as any).matches[0].scoreIda1).toBe('');
+    expect((merged.fase as any).matches[0].scoreIda2).toBe('');
   });
 
   it('registra o torneio em shadow e mantém o cron desativado', () => {
