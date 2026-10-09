@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cartolaCopaBrasilAdapter, updateCopaBrasilFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-copa-brasil';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
-import { mergeFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
+import { mergeCopaBrasilFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
 
 const initialFases = {
   '1ª Fase': {
@@ -103,7 +103,7 @@ describe('Copa do Brasil adapter', () => {
         scoreVolta2: '',
       }],
     };
-    const merged = mergeFasesPreservingScores(
+    const merged = mergeCopaBrasilFasesPreservingScores(
       { '1ª Fase': initialFases['1ª Fase'] },
       { '1ª Fase': emptyPhase },
     );
@@ -127,7 +127,7 @@ describe('Copa do Brasil adapter', () => {
         ],
       },
     };
-    const merged = mergeFasesPreservingScores(prev, next);
+    const merged = mergeCopaBrasilFasesPreservingScores(prev, next);
     const matches = (merged['1ª Fase'] as any).matches;
     expect(matches[0].scoreIda1).toBe('55,00');
     expect(matches[0].scoreIda2).toBe('45,00');
@@ -152,7 +152,7 @@ describe('Copa do Brasil adapter', () => {
         ],
       },
     };
-    const merged = mergeFasesPreservingScores(prev, next);
+    const merged = mergeCopaBrasilFasesPreservingScores(prev, next);
     const matches = (merged['1ª Fase'] as any).matches;
     expect(matches[0].scoreVolta1).toBe('80,00');
     expect(matches[0].scoreVolta2).toBe('75,00');
@@ -163,7 +163,7 @@ describe('Copa do Brasil adapter', () => {
   it('não transfere placares por índice quando não existe identidade de confronto', () => {
     const prev = { fase: { matches: [{ scoreIda1: '70,00', scoreIda2: '60,00' }] } };
     const next = { fase: { matches: [{ team1: 'Time Novo', team2: 'Outro Time', scoreIda1: '', scoreIda2: '' }] } };
-    const merged = mergeFasesPreservingScores(prev, next);
+    const merged = mergeCopaBrasilFasesPreservingScores(prev, next);
     expect((merged.fase as any).matches[0].scoreIda1).toBe('');
     expect((merged.fase as any).matches[0].scoreIda2).toBe('');
   });
