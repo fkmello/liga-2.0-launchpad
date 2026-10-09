@@ -31,9 +31,15 @@ export function diffPayloads(
     ) {
       const semanticCurrent = canonicalCopaBrasilTeams(current?.dados_externos);
       const semanticNext = canonicalCopaBrasilTeams(next.dados_externos);
-      // If either shape cannot be safely interpreted, fall back to strict comparison.
-      a = semanticCurrent ?? stableStringify(current?.[section] ?? null);
-      b = semanticNext ?? stableStringify(next[section]);
+      // Use semantic comparison only when both shapes are safely interpretable.
+      // Otherwise compare both sides strictly to avoid mixing representations.
+      if (semanticCurrent !== null && semanticNext !== null) {
+        a = semanticCurrent;
+        b = semanticNext;
+      } else {
+        a = stableStringify(current?.[section] ?? null);
+        b = stableStringify(next[section]);
+      }
     } else {
       a = stableStringify(current?.[section] ?? null);
       b = stableStringify(next[section]);
