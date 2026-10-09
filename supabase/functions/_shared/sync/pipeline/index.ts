@@ -162,7 +162,10 @@ export async function runPipeline(
   const validation = validateTournamentPayload(payload, def);
   if (!validation.valid) base.errors.push(...validation.errors);
 
-  const comparison = diffPayloads(current, payload);
+  const comparison = diffPayloads(current, payload, {
+    league: def.league,
+    semantic: opts.compare === true,
+  });
   const fields = Object.keys(comparison.diff);
   const status = resolveCompareStatus(fields);
 
