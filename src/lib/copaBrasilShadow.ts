@@ -28,3 +28,13 @@ export function getCopaBrasilShadowPhase(
   if (!phase || !Array.isArray(phase.matches)) return null;
   return phase as Record<string, unknown>;
 }
+
+
+/**
+ * O cadastro dos times e seus escudos é compartilhado por todas as fases.
+ * A fase não deve fazer parte desta chave para evitar refetch e flicker ao trocar
+ * a fase do mata-mata. A flag continua separando os contratos legacy e shadow.
+ */
+export function getCopaBrasilBaseDataQueryKey(shadowRead: boolean) {
+  return ['base-dados-copa', shadowRead] as const;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCopaBrasilShadowPhase, getCopaBrasilShadowRows } from '@/lib/copaBrasilShadow';
+import { getCopaBrasilBaseDataQueryKey, getCopaBrasilShadowPhase, getCopaBrasilShadowRows } from '@/lib/copaBrasilShadow';
 
 describe('Copa do Brasil shadow read contract', () => {
   const payload = {
@@ -14,6 +14,11 @@ describe('Copa do Brasil shadow read contract', () => {
       rows: [['Time A', '101', 'https://example.test/a.png']],
     },
   };
+
+  it('uses one shared query key for team badges regardless of selected phase', () => {
+    expect(getCopaBrasilBaseDataQueryKey(false)).toEqual(['base-dados-copa', false]);
+    expect(getCopaBrasilBaseDataQueryKey(true)).toEqual(['base-dados-copa', true]);
+  });
 
   it('extracts normalized team rows for badges and team ID mapping', () => {
     expect(getCopaBrasilShadowRows(payload)).toEqual(payload.dados_externos.rows);

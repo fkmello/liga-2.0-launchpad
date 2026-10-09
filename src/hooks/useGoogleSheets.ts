@@ -4,7 +4,7 @@ import { fetchFromCache, fetchWithFallback } from '@/lib/sheetsCache';
 import { isConsolidatedTournament, useTournamentPayload } from '@/hooks/useTournamentPayload';
 import type { StandingRow } from '@/types/tournament';
 import { USE_COPA_BRASIL_SHADOW_READ } from '@/config/featureFlags';
-import { getCopaBrasilShadowPhase, getCopaBrasilShadowRows } from '@/lib/copaBrasilShadow';
+import { getCopaBrasilBaseDataQueryKey, getCopaBrasilShadowPhase, getCopaBrasilShadowRows } from '@/lib/copaBrasilShadow';
 
 
 export interface Confronto {
@@ -204,7 +204,7 @@ export function useClassificacao(league: string = 'serie_a'): ClassificacaoResul
 
 export function useBaseDadosCopa(fase: string = '1ª Fase') {
   return useQuery<DadosExternosData>({
-    queryKey: ['base-dados-copa', fase, USE_COPA_BRASIL_SHADOW_READ],
+    queryKey: getCopaBrasilBaseDataQueryKey(USE_COPA_BRASIL_SHADOW_READ),
     queryFn: async () => {
       if (USE_COPA_BRASIL_SHADOW_READ) {
         const shadow = await fetchFromCache<unknown>(`shadow/copa_brasil/${new Date().getFullYear()}`);
