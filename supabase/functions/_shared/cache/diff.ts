@@ -65,7 +65,7 @@ function canonicalCopaBrasilTeams(value: unknown): string | null {
   const teams: Array<{ id: string; name: string }> = [];
   for (const item of candidateRows as unknown[]) {
     if (!Array.isArray(item) || item.length < 2) continue;
-    const name = String(item[0] ?? '').trim().replace(/\\s+/g, ' ');
+    const name = String(item[0] ?? '').trim().replace(/\s+/g, ' ');
     const id = String(item[1] ?? '').trim();
     // The legacy raw matrix may include a header row.
     if (!name && id.toLowerCase() === 'id') continue;
