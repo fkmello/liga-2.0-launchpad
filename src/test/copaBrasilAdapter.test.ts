@@ -43,7 +43,7 @@ describe('Copa do Brasil adapter', () => {
     const result = updateCopaBrasilFases(
       initialFases,
       5,
-      new Map([['101', null], ['102', undefined]]),
+      new Map<string, number | null>([['101', null], ['102', null]]),
       idByName,
     );
     expect(result['1ª Fase'].matches[0]).toEqual(initialFases['1ª Fase'].matches[0]);
