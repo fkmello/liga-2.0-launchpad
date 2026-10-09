@@ -1,0 +1,23 @@
+name: Copa do Brasil comparison test
+
+on:
+  push:
+    branches: [fix/copa-brasil-semantic-compare]
+
+permissions:
+  contents: read
+
+jobs:
+  copa-brasil-compare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Run focused comparison tests
+        run: npx vitest run src/test/copaBrasilCompare.test.ts
