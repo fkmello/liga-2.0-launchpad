@@ -40,6 +40,26 @@ describe('Copa do Brasil semantic comparison', () => {
     expect(result.diff).toEqual({});
   });
 
+  it('normalizes leading, trailing, and repeated whitespace in team names', () => {
+    const spacedLegacy = {
+      ...legacyPayload,
+      dados_externos: {
+        raw: [
+          ['', 'ID'],
+          ['  Time   A  ', '101', 'https://legacy.example/badge-a'],
+          ['Time B', '102', 'https://legacy.example/badge-b'],
+        ],
+      },
+    };
+
+    const result = diffPayloads(spacedLegacy, apiPayload, {
+      league: 'copa_brasil',
+      semantic: true,
+    });
+
+    expect(result.changed).toBe(false);
+  });
+
   it('still reports a difference when a team ID or name changes', () => {
     const changed = {
       ...apiPayload,
