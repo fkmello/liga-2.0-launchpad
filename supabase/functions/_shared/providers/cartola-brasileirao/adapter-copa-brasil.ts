@@ -136,6 +136,18 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
             : null;
     }
 
+    // scope=fase não informa ida/volta. Só atualizamos quando a rodada
+    // determinada pelo mercado pertence à fase solicitada; caso contrário,
+    // falhamos explicitamente em vez de retornar sucesso sem atualizar nada.
+    if (ctx.scope.kind === 'fase') {
+      const mappedPhase = targetRound === null ? undefined : ROUND_TO_PHASE_LEG[targetRound];
+      if (!mappedPhase || mappedPhase.fase !== ctx.scope.fase) {
+        throw new Error(
+          `Não é possível atualizar a fase "${ctx.scope.fase}" pela rodada ${targetRound ?? 'indisponível'}. Informe scope=rodada com a rodada de ida/volta desejada.`,
+        );
+      }
+    }
+
     const mapped = targetRound === null ? undefined : ROUND_TO_PHASE_LEG[targetRound];
     const idsForScores = mapped ? ids : [];
     const scores = idsForScores.length && targetRound !== null && targetRound > 0
