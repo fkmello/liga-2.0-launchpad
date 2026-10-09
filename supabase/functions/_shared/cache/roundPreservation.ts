@@ -28,9 +28,14 @@ function matchIdentity(match: Record<string, any>): string | null {
 
 /** Merge campo a campo para que um payload parcial não apague placares antigos. */
 function mergePhaseMatchesPreservingScores(prev: unknown, next: unknown): unknown {
-  const prevMatches = (prev as Fase | undefined)?.matches;
-  const nextMatches = (next as Fase | undefined)?.matches;
-  if (!Array.isArray(prevMatches) || !Array.isArray(nextMatches)) return next;
+  const prevPhase = prev as Fase | undefined;
+  const nextPhase = next as Fase | undefined;
+  const prevMatches = prevPhase?.matches;
+  const nextMatches = nextPhase?.matches;
+  if (!Array.isArray(prevMatches)) return next;
+  if (!Array.isArray(nextMatches)) {
+    return { ...(prevPhase ?? {}), ...(nextPhase ?? {}), matches: prevMatches };
+  }
 
   const previousByIdentity = new Map<string, Record<string, any>>();
   prevMatches.forEach((match: Record<string, any>) => {
