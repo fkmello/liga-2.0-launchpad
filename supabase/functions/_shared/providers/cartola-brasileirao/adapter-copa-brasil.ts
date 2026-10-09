@@ -131,7 +131,9 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
         ? null
         : market.status_mercado === 1
           ? market.rodada_atual - 1
-          : market.rodada_atual;
+          : market.status_mercado === 2
+            ? market.rodada_atual
+            : null;
     }
 
     const mapped = targetRound === null ? undefined : ROUND_TO_PHASE_LEG[targetRound];
