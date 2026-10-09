@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cartolaCopaBrasilAdapter, updateCopaBrasilFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-copa-brasil';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
+import { mergeFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
 
 const initialFases = {
   '1ª Fase': {
@@ -29,7 +30,7 @@ describe('Copa do Brasil adapter', () => {
     const result = updateCopaBrasilFases(
       initialFases,
       5,
-      new Map([['101', 77.25], ['102', 66.5]]),
+      new Map<string, number | null>([['101', 77.25], ['102', 66.5]]),
       idByName,
     );
     const match = result['1ª Fase'].matches[0];
@@ -51,6 +52,24 @@ describe('Copa do Brasil adapter', () => {
 
   it('não altera fases quando a rodada não pertence à Copa do Brasil', () => {
     expect(updateCopaBrasilFases(initialFases, 24, new Map(), idByName)).toBe(initialFases);
+  });
+
+  it('merge do shadow preserva placares de ida/volta ausentes no payload novo', () => {
+    const emptyPhase = {
+      ...initialFases['1ª Fase'],
+      matches: [{
+        ...initialFases['1ª Fase'].matches[0],
+        scoreIda1: '',
+        scoreIda2: '',
+        scoreVolta1: '',
+        scoreVolta2: '',
+      }],
+    };
+    const merged = mergeFasesPreservingScores(
+      { '1ª Fase': initialFases['1ª Fase'] },
+      { '1ª Fase': emptyPhase },
+    );
+    expect((merged['1ª Fase'] as any).matches[0]).toEqual(initialFases['1ª Fase'].matches[0]);
   });
 
   it('registra o torneio em shadow e mantém o cron desativado', () => {
