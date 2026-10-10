@@ -4,11 +4,15 @@ import { cartolaCopaBrasilAdapter } from '../providers/cartola-brasileirao/adapt
 import { cartolaBrasileiraoAdapter } from '../providers/cartola-brasileirao/adapter.ts';
 import { cartolaBrasileiraoSerieBAdapter } from '../providers/cartola-brasileirao/adapter-serie-b.ts';
 import { cartolaBrasileiraoSerieCAdapter } from '../providers/cartola-brasileirao/adapter-serie-c.ts';
+import { createCartolaMataMataAdapter } from '../providers/cartola-brasileirao/adapter-mata-mata.ts';
 
 /**
  * Registry = única fonte de verdade. Nenhum cache_key, season, version ou
  * schema_version pode ser hardcoded fora daqui.
  */
+const cartolaLibertadoresAdapter = createCartolaMataMataAdapter('libertadores');
+const cartolaSulamericanaAdapter = createCartolaMataMataAdapter('sulamericana');
+
 const DEFINITIONS: Record<string, TournamentDefinition> = {
   copa_mundo: {
     league: 'copa_mundo', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
@@ -16,6 +20,22 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     version: 1, schema_version: 1, standingsPreset: 'FIFA', mergeableKeys: ['fases.fase_grupos'], adapters: [cartolaCopaAdapter],
     adapterPrecedence: { cartola_copa_v1: 10 },
     cron: { enabled: true, statusProvider: 'cartola_copa', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+  },
+  libertadores: {
+    league: 'libertadores', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
+    cacheKey: (season) => (season === 2026 ? 'libertadores' : `libertadores:${season}`),
+    cacheType: 'copa', version: 1, schema_version: 1,
+    standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaLibertadoresAdapter],
+    adapterPrecedence: { cartola_libertadores_v1: 10 },
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+  },
+  sulamericana: {
+    league: 'sulamericana', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
+    cacheKey: (season) => (season === 2026 ? 'sulamericana' : `sulamericana:${season}`),
+    cacheType: 'copa', version: 1, schema_version: 1,
+    standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaSulamericanaAdapter],
+    adapterPrecedence: { cartola_sulamericana_v1: 10 },
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
   },
   copa_brasil: {
     league: 'copa_brasil', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
