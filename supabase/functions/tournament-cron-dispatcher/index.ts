@@ -241,8 +241,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      let syncResult: Record<string, unknown>;
       try {
-        await callSync(supabaseUrl, cronSecret, league, season);
+        syncResult = await callSync(supabaseUrl, cronSecret, league, season);
       } catch (e) {
         await fail('SYNC_ERROR', e);
         continue;
@@ -259,7 +260,10 @@ Deno.serve(async (req) => {
         last_error_at: null,
       });
       push('SYNC_1', {
-        persisted: true,
+        persisted: syncResult.persisted === true,
+        changed: syncResult.changed === true,
+        sync_hash: typeof syncResult.hash === 'string' ? syncResult.hash : null,
+        records_processed: typeof syncResult.records_processed === 'number' ? syncResult.records_processed : null,
         last_sync_status: 'SUCCESS',
         last_sync_phase: 'SYNC_1',
       });
@@ -269,8 +273,9 @@ Deno.serve(async (req) => {
     // ── Rodada já sincronizada: só resta eventualmente a Sync #2 ──
     const sinceFirst = minutesSince(state.first_sync_at);
     if (!state.second_sync_done && sinceFirst !== null && sinceFirst >= secondDelay) {
+      let syncResult: Record<string, unknown>;
       try {
-        await callSync(supabaseUrl, cronSecret, league, season);
+        syncResult = await callSync(supabaseUrl, cronSecret, league, season);
       } catch (e) {
         await fail('SYNC_ERROR', e);
         continue;
@@ -285,7 +290,10 @@ Deno.serve(async (req) => {
         last_error_at: null,
       });
       push('SYNC_2', {
-        persisted: true,
+        persisted: syncResult.persisted === true,
+        changed: syncResult.changed === true,
+        sync_hash: typeof syncResult.hash === 'string' ? syncResult.hash : null,
+        records_processed: typeof syncResult.records_processed === 'number' ? syncResult.records_processed : null,
         last_sync_status: 'SUCCESS',
         last_sync_phase: 'SYNC_2',
       });
