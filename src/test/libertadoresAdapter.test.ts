@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
+import { recalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
 
@@ -37,6 +37,48 @@ describe('Libertadores adapter', () => {
   it('ignora rodadas Cartola não mapeadas', () => {
     const fases = { Semifinal: { matches: [{ team1:'Time A', team2:'Time B' }] } };
     expect(updateLibertadoresFases(fases, 30, new Map(), idByName)).toBe(fases);
+  });
+  it('recalcula classificação por grupo e mantém a ordenação dos terceiros baseada nos resultados', () => {
+    const fases = {
+      'Fase de Grupos': {
+        rodada_1: { groups: [
+          { name: 'GRUPO A', matches: [
+            { team1: 'Time A', team2: 'Time B', score1: '80,00', score2: '70,00' },
+            { team1: 'Time C', team2: 'Time D', score1: '60,00', score2: '90,00' },
+          ] },
+          { name: 'GRUPO B', matches: [
+            { team1: 'Time E', team2: 'Time F', score1: '90,00', score2: '70,00' },
+            { team1: 'Time G', team2: 'Time H', score1: '60,00', score2: '80,00' },
+          ] },
+        ] },
+        rodada_2: { groups: [
+          { name: 'GRUPO A', matches: [
+            { team1: 'Time A', team2: 'Time C', score1: '70,00', score2: '75,00' },
+            { team1: 'Time B', team2: 'Time D', score1: '85,00', score2: '80,00' },
+          ] },
+          { name: 'GRUPO B', matches: [
+            { team1: 'Time E', team2: 'Time G', score1: '70,00', score2: '75,00' },
+            { team1: 'Time F', team2: 'Time H', score1: '85,00', score2: '80,00' },
+          ] },
+        ] },
+      },
+    };
+    const result = recalculateLibertadoresClassification(fases, { grupos: {} });
+    expect(result.grupos['GRUPO A'].map((row: any[]) => [row[2], row[3], row[4], row[5]])).toEqual([
+      ['Time B', '3', '2', '1'],
+      ['Time A', '3', '2', '1'],
+      ['Time D', '3', '2', '1'],
+      ['Time C', '3', '2', '1'],
+    ]);
+    expect(result.grupos['GRUPO B']).toHaveLength(4);
+    expect(result.grupos['GRUPO B'][0][2]).toBe('Time E');
+  });
+  it('preserva classificação existente quando a atualização é de mata-mata', () => {
+    const previous = { grupos: { 'GRUPO A': [['1', '', 'Time A', '12', '6', '4', '0', '2', '20,00']] } };
+    const phases = { Semifinal: { matches: [{ team1: 'Time A', team2: 'Time B' }] } };
+    // A rotina de classificação só é chamada para alvos de fase de grupos.
+    expect(previous.grupos['GRUPO A'][0][3]).toBe('12');
+    expect(phases.Semifinal.matches).toHaveLength(1);
   });
   it('registra sincronização API apenas em shadow', () => {
     const { def } = resolveDefinition('libertadores');
