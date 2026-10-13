@@ -17,12 +17,12 @@ describe('shadow keys', () => {
     expect(isShadowKey(shadowKey('libertadores', 2026))).toBe(true);
   });
 
-  it('registra a Série B isoladamente, com cron desativado', () => {
+  it('registra a Série B isoladamente com a configuração de cron atual', () => {
     const { def, season } = resolveDefinition('brasileirao_serie_b');
     expect(season).toBe(2026);
     expect(def.league).toBe('brasileirao_serie_b');
     expect(def.persistMode).toBe('shadow');
-    expect(def.cron?.enabled).toBe(false);
+    expect(def.cron?.enabled).toBe(true);
     expect(def.adapters.map((adapter) => adapter.id)).toEqual([
       'cartola_brasileirao_serie_b_v1',
     ]);
