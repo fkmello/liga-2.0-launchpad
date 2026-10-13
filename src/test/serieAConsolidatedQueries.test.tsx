@@ -60,6 +60,7 @@ async function loadHooks(flag: boolean, serieBFlag = false) {
   vi.doMock('@/config/featureFlags', () => ({
     USE_CONSOLIDATED_SERIE_A: flag,
     USE_CONSOLIDATED_SERIE_B: serieBFlag,
+    USE_CONSOLIDATED_SERIE_C: false,
   }));
   hooks = await import('@/hooks/useGoogleSheets');
 }
