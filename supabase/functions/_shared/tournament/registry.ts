@@ -4,6 +4,7 @@ import { cartolaCopaBrasilAdapter } from '../providers/cartola-brasileirao/adapt
 import { cartolaBrasileiraoAdapter } from '../providers/cartola-brasileirao/adapter.ts';
 import { cartolaBrasileiraoSerieBAdapter } from '../providers/cartola-brasileirao/adapter-serie-b.ts';
 import { cartolaBrasileiraoSerieCAdapter } from '../providers/cartola-brasileirao/adapter-serie-c.ts';
+import { cartolaLibertadoresAdapter } from '../providers/cartola-brasileirao/adapter-libertadores.ts';
 
 /**
  * Registry = única fonte de verdade. Nenhum cache_key, season, version ou
@@ -42,6 +43,13 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
       firstSyncWindowMinutes: 30,
       secondSyncDelayMinutes: 60,
     },
+  },
+  libertadores: {
+    league: 'libertadores', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
+    cacheKey: (season) => `libertadores:${season}`, cacheType: 'libertadores', version: 1, schema_version: 1,
+    standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaLibertadoresAdapter],
+    adapterPrecedence: { cartola_brasileirao_libertadores_v1: 10 },
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
   },
   brasileirao_serie_b: {
     league: 'brasileirao_serie_b', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
