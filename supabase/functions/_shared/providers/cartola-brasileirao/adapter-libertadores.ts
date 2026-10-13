@@ -98,7 +98,7 @@ export function updateLibertadoresFases(
 }
 
 
-type GroupStanding = { team: string; points: number; played: number; wins: number; draws: number; losses: number; goalDiff: number };
+type GroupStanding = { team: string; points: number; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDiff: number };
 
 function parseFantasyScore(value: unknown): number | null {
   if (value === null || value === undefined || String(value).trim() === '') return null;
@@ -135,6 +135,8 @@ export function recalculateLibertadoresClassification(
         wins: 0,
         draws: 0,
         losses: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
         goalDiff: 0,
       });
     }
@@ -155,8 +157,8 @@ export function recalculateLibertadoresClassification(
         const team1 = String(match?.team1 ?? '').trim();
         const team2 = String(match?.team2 ?? '').trim();
         if (!team1 || !team2) continue;
-        if (!standings.has(team1)) standings.set(team1, { team: team1, points: 0, played: 0, wins: 0, draws: 0, losses: 0, goalDiff: 0 });
-        if (!standings.has(team2)) standings.set(team2, { team: team2, points: 0, played: 0, wins: 0, draws: 0, losses: 0, goalDiff: 0 });
+        if (!standings.has(team1)) standings.set(team1, { team: team1, points: 0, played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDiff: 0 });
+        if (!standings.has(team2)) standings.set(team2, { team: team2, points: 0, played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDiff: 0 });
 
         const score1 = parseFantasyScore(match?.score1);
         const score2 = parseFantasyScore(match?.score2);
@@ -165,6 +167,8 @@ export function recalculateLibertadoresClassification(
         const a = standings.get(team1)!;
         const b = standings.get(team2)!;
         a.played++; b.played++;
+        a.goalsFor += score1; a.goalsAgainst += score2;
+        b.goalsFor += score2; b.goalsAgainst += score1;
         a.goalDiff += score1 - score2;
         b.goalDiff += score2 - score1;
         if (score1 > score2) { a.points += 3; a.wins++; b.losses++; }
@@ -175,7 +179,7 @@ export function recalculateLibertadoresClassification(
   }
 
   const compare = (a: GroupStanding, b: GroupStanding) =>
-    b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff;
+    b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor;
 
   const grupos: Record<string, unknown[]> = {};
   for (const [groupName, standings] of groupMatches) {
@@ -183,7 +187,7 @@ export function recalculateLibertadoresClassification(
       .sort(compare)
       .map((team, index) => [
         String(index + 1), '', team.team, String(team.points), String(team.played),
-        String(team.wins), String(team.draws), String(team.losses), formatStandingScore(team.goalDiff),
+        String(team.wins), String(team.draws), String(team.losses), formatStandingScore(team.goalsFor), formatStandingScore(team.goalDiff),
       ]);
   }
   return { grupos };
