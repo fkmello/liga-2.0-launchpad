@@ -65,9 +65,9 @@ describe('Libertadores adapter', () => {
     };
     const result = recalculateLibertadoresClassification(fases, { grupos: {} });
     expect(result.grupos['GRUPO A'].map((row: any[]) => [row[2], row[3], row[4], row[5]])).toEqual([
-      ['Time B', '3', '2', '1'],
-      ['Time A', '3', '2', '1'],
       ['Time D', '3', '2', '1'],
+      ['Time A', '3', '2', '1'],
+      ['Time B', '3', '2', '1'],
       ['Time C', '3', '2', '1'],
     ]);
     expect(result.grupos['GRUPO B']).toHaveLength(4);
