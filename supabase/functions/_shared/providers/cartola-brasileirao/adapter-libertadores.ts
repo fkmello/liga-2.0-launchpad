@@ -97,6 +97,98 @@ export function updateLibertadoresFases(
   };
 }
 
+
+type GroupStanding = { team: string; points: number; played: number; wins: number; draws: number; losses: number; goalDiff: number };
+
+function parseFantasyScore(value: unknown): number | null {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const score = Number(String(value).replace(',', '.'));
+  return Number.isFinite(score) ? score : null;
+}
+
+function formatStandingScore(value: number): string {
+  return value.toFixed(2).replace('.', ',');
+}
+
+/**
+ * Recalcula a classificação apenas a partir dos placares dos jogos da fase de grupos.
+ * Os dois primeiros e os terceiros colocados são ordenados pela mesma regra usada na tela:
+ * pontos, vitórias e saldo de pontos Cartola.
+ */
+export function recalculateLibertadoresClassification(
+  fases: ContinentalFases,
+  previousClassification: { grupos: Record<string, unknown[]> },
+): { grupos: Record<string, unknown[]> } {
+  const groupMatches = new Map<string, Map<string, GroupStanding>>();
+
+  // Preserve group/team identities from the existing table, including teams whose matches
+  // have not yet received scores in the available rounds.
+  for (const [groupName, rows] of Object.entries(previousClassification?.grupos ?? {})) {
+    const standings = new Map<string, GroupStanding>();
+    for (const row of rows as any[]) {
+      const team = String(Array.isArray(row) ? row[2] ?? '' : '').trim();
+      if (!team) continue;
+      standings.set(team, {
+        team,
+        points: 0,
+        played: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalDiff: 0,
+      });
+    }
+    groupMatches.set(groupName, standings);
+  }
+
+  for (let round = 1; round <= 6; round++) {
+    const roundData = fases?.['Fase de Grupos']?.[`rodada_${round}`];
+    if (!Array.isArray(roundData?.groups)) continue;
+    for (const group of roundData.groups as any[]) {
+      const groupName = String(group?.name ?? '').trim() || 'Grupo';
+      let standings = groupMatches.get(groupName);
+      if (!standings) {
+        standings = new Map<string, GroupStanding>();
+        groupMatches.set(groupName, standings);
+      }
+      for (const match of Array.isArray(group?.matches) ? group.matches : []) {
+        const team1 = String(match?.team1 ?? '').trim();
+        const team2 = String(match?.team2 ?? '').trim();
+        if (!team1 || !team2) continue;
+        if (!standings.has(team1)) standings.set(team1, { team: team1, points: 0, played: 0, wins: 0, draws: 0, losses: 0, goalDiff: 0 });
+        if (!standings.has(team2)) standings.set(team2, { team: team2, points: 0, played: 0, wins: 0, draws: 0, losses: 0, goalDiff: 0 });
+
+        const score1 = parseFantasyScore(match?.score1);
+        const score2 = parseFantasyScore(match?.score2);
+        if (score1 === null || score2 === null) continue;
+
+        const a = standings.get(team1)!;
+        const b = standings.get(team2)!;
+        a.played++; b.played++;
+        a.goalDiff += score1 - score2;
+        b.goalDiff += score2 - score1;
+        if (score1 > score2) { a.points += 3; a.wins++; b.losses++; }
+        else if (score2 > score1) { b.points += 3; b.wins++; a.losses++; }
+        else { a.points++; b.points++; a.draws++; b.draws++; }
+      }
+    }
+  }
+
+  const compare = (a: GroupStanding, b: GroupStanding) =>
+    b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff;
+
+  const grupos: Record<string, unknown[]> = {};
+  for (const [groupName, standings] of groupMatches) {
+    grupos[groupName] = [...standings.values()]
+      .sort(compare)
+      .map((team, index) => [
+        String(index + 1), '', team.team, String(team.points), String(team.played),
+        String(team.wins), String(team.draws), String(team.losses), formatStandingScore(team.goalDiff),
+      ]);
+  }
+  return { grupos };
+}
+
 export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
   id: 'cartola_brasileirao_libertadores_v1',
   provider: KnownProviders.CARTOLA_BRASILEIRAO,
@@ -125,11 +217,18 @@ export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
     const scores = target && targetRound !== null
       ? await fetchTeamsRoundScores(ids, targetRound)
       : new Map<string, number | null>();
-    return {
-      fases: updateLibertadoresFases((ctx.previous?.fases ?? {}) as ContinentalFases, targetRound, scores, buildIdByName(ctx)),
-      classificacao: ctx.previous?.classificacao ?? { grupos: {} },
-      teams,
-    };
+    const updatedFases = updateLibertadoresFases(
+      (ctx.previous?.fases ?? {}) as ContinentalFases,
+      targetRound,
+      scores,
+      buildIdByName(ctx),
+    );
+    const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
+    const updatedClassification = target?.kind === 'group'
+      ? recalculateLibertadoresClassification(updatedFases, previousClassification)
+      : previousClassification;
+
+    return { fases: updatedFases, classificacao: updatedClassification, teams };
   },
   toFases(raw) { return raw.fases; },
   toClassificacao(raw) { return raw.classificacao; },
