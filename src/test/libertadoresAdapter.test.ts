@@ -72,6 +72,10 @@ describe('Libertadores adapter', () => {
     ]);
     expect(result.grupos['GRUPO B']).toHaveLength(4);
     expect(result.grupos['GRUPO B'][0][2]).toBe('Time E');
+    // A tela lê penúltima coluna como pontos feitos e última como saldo.
+    expect(result.grupos['GRUPO A'][0]).toHaveLength(10);
+    expect(result.grupos['GRUPO A'][0][8]).toBe('170,00');
+    expect(result.grupos['GRUPO A'][0][9]).toBe('25,00');
   });
   it('preserva classificação existente quando a atualização é de mata-mata', () => {
     const previous = { grupos: { 'GRUPO A': [['1', '', 'Time A', '12', '6', '4', '0', '2', '20,00']] } };
