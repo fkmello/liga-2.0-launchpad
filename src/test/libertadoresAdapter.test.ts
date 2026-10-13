@@ -38,7 +38,7 @@ describe('Libertadores adapter', () => {
     const fases = { Semifinal: { matches: [{ team1:'Time A', team2:'Time B' }] } };
     expect(updateLibertadoresFases(fases, 30, new Map(), idByName)).toBe(fases);
   });
-  it('recalcula classificação por grupo e mantém a ordenação dos terceiros baseada nos resultados', () => {
+  it('recalcula a classificação por grupo usando os placares acumulados', () => {
     const fases = {
       'Fase de Grupos': {
         rodada_1: { groups: [
@@ -64,7 +64,7 @@ describe('Libertadores adapter', () => {
       },
     };
     const result = recalculateLibertadoresClassification(fases, { grupos: {} });
-    expect(result.grupos['GRUPO A'].map((row: any[]) => [row[2], row[3], row[4], row[5]])).toEqual([
+    expect((result.grupos['GRUPO A'] as any[][]).map((row: any[]) => [row[2], row[3], row[4], row[5]])).toEqual([
       ['Time D', '3', '2', '1'],
       ['Time A', '3', '2', '1'],
       ['Time B', '3', '2', '1'],
