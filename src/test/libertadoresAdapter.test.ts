@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
+import { recalculateLibertadoresClassification, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
 
@@ -77,12 +77,19 @@ describe('Libertadores adapter', () => {
     expect(result.grupos['GRUPO A'][0][8]).toBe('170,00');
     expect(result.grupos['GRUPO A'][0][9]).toBe('25,00');
   });
-  it('preserva classificação existente quando a atualização é de mata-mata', () => {
+  it('só permite recalcular a classificação nas seis rodadas da fase de grupos', () => {
+    for (const round of [11, 12, 14, 15, 17, 18]) {
+      expect(shouldRecalculateLibertadoresClassification(round)).toBe(true);
+    }
+  });
+  it('não recalcula a classificação em rodadas eliminatórias ou não mapeadas', () => {
     const previous = { grupos: { 'GRUPO A': [['1', '', 'Time A', '12', '6', '4', '0', '2', '20,00']] } };
-    const phases = { Semifinal: { matches: [{ team1: 'Time A', team2: 'Time B' }] } };
-    // A rotina de classificação só é chamada para alvos de fase de grupos.
+    for (const round of [23, 24, 27, 28, 31, 32, 37, 30, null]) {
+      expect(shouldRecalculateLibertadoresClassification(round)).toBe(false);
+    }
+    // A classificação anterior continua sendo o valor que o adaptador deve devolver
+    // quando a função de decisão acima indica que não deve haver recálculo.
     expect(previous.grupos['GRUPO A'][0][3]).toBe('12');
-    expect(phases.Semifinal.matches).toHaveLength(1);
   });
   it('registra sincronização API apenas em shadow', () => {
     const { def } = resolveDefinition('libertadores');
