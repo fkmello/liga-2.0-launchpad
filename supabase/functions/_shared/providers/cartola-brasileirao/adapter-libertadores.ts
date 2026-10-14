@@ -24,6 +24,11 @@ const ROUND_TO_TARGET: Record<number, RoundTarget> = {
   37: { kind: 'knockout', fase: 'Final', leg: 'ida' },
 };
 
+/** Só recalcula a classificação quando a rodada-alvo pertence à fase de grupos. */
+export function shouldRecalculateLibertadoresClassification(targetRound: number | null): boolean {
+  return targetRound !== null && ROUND_TO_TARGET[targetRound]?.kind === 'group';
+}
+
 function normalizeName(value: unknown): string {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
@@ -228,7 +233,7 @@ export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
       buildIdByName(ctx),
     );
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
-    const updatedClassification = target?.kind === 'group'
+    const updatedClassification = shouldRecalculateLibertadoresClassification(targetRound)
       ? recalculateLibertadoresClassification(updatedFases, previousClassification)
       : previousClassification;
 
