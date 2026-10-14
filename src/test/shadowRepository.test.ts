@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createShadowRepository } from '../../supabase/functions/_shared/cache/shadowRepository';
-import { mergeFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
+import { mergeFasesPreservingScores, mergeLibertadoresFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
 import { runPipeline } from '../../supabase/functions/_shared/sync/pipeline/index';
 import { resolveDefinition } from '../../supabase/functions/_shared/tournament/registry';
 import type { TournamentCachePayload } from '../../supabase/functions/_shared/tournament/types';
@@ -157,6 +157,38 @@ describe('mergeFasesPreservingScores', () => {
       { rodada_25: fase(25, true) },
     );
     expect(Object.keys(merged).sort()).toEqual(['rodada_23', 'rodada_25']);
+  });
+});
+
+describe('mergeLibertadoresFasesPreservingScores', () => {
+  it('preserva placares dentro de rodada e grupo quando a nova versão vem vazia', () => {
+    const previous = {
+      'Fase de Grupos': {
+        rodada_1: { groups: [{ name: 'GRUPO A', matches: [{ team1: 'Time A', team2: 'Time B', score1: '77,00', score2: '55,00' }] }] },
+      },
+    };
+    const next = {
+      'Fase de Grupos': {
+        rodada_1: { groups: [{ name: 'GRUPO A', matches: [{ team1: 'Time A', team2: 'Time B', score1: '', score2: '' }] }] },
+      },
+    };
+
+    const merged = mergeLibertadoresFasesPreservingScores(previous, next);
+    const match = (merged['Fase de Grupos'] as any).rodada_1.groups[0].matches[0];
+    expect(match.score1).toBe('77,00');
+    expect(match.score2).toBe('55,00');
+  });
+
+  it('preserva placares de ida e volta no mata-mata', () => {
+    const previous = { 'Oitavas de Final': { matches: [{ team1: 'Time A', team2: 'Time B', scoreIda1: '70,00', scoreIda2: '60,00', scoreVolta1: '80,00', scoreVolta2: '65,00' }] } };
+    const next = { 'Oitavas de Final': { matches: [{ team1: 'Time A', team2: 'Time B', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' }] } };
+
+    const merged = mergeLibertadoresFasesPreservingScores(previous, next);
+    const match = (merged['Oitavas de Final'] as any).matches[0];
+    expect(match.scoreIda1).toBe('70,00');
+    expect(match.scoreIda2).toBe('60,00');
+    expect(match.scoreVolta1).toBe('80,00');
+    expect(match.scoreVolta2).toBe('65,00');
   });
 });
 
