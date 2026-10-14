@@ -37,7 +37,7 @@ describe('Cartola API client — pontuação por rodada', () => {
   });
 
   it('propaga falhas inesperadas após as tentativas de retry', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response('indisponível', { status: 503 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('indisponível', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(fetchTeamRoundScore('50145709', 31)).rejects.toThrow(/503/);
