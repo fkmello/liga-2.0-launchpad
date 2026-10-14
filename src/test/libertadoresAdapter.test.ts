@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recalculateLibertadoresClassification, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
+import { recalculateLibertadoresClassification, resolveLibertadoresClassification, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
 
@@ -87,9 +87,10 @@ describe('Libertadores adapter', () => {
     for (const round of [23, 24, 27, 28, 31, 32, 37, 30, null]) {
       expect(shouldRecalculateLibertadoresClassification(round)).toBe(false);
     }
-    // A classificação anterior continua sendo o valor que o adaptador deve devolver
-    // quando a função de decisão acima indica que não deve haver recálculo.
-    expect(previous.grupos['GRUPO A'][0][3]).toBe('12');
+    const fases = { 'Fase de Grupos': { rodada_1: { groups: [] } } };
+    for (const round of [23, 24, 27, 28, 31, 32, 37, 30, null]) {
+      expect(resolveLibertadoresClassification(fases, round, previous)).toBe(previous);
+    }
   });
   it('registra sincronização API apenas em shadow', () => {
     const { def } = resolveDefinition('libertadores');
