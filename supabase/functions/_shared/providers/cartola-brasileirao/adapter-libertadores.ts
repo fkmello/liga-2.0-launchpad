@@ -198,6 +198,16 @@ export function recalculateLibertadoresClassification(
   return { grupos };
 }
 
+/** Mantém a classificação anterior intacta em rodadas eliminatórias ou não mapeadas. */
+export function resolveLibertadoresClassification(
+  fases: ContinentalFases,
+  targetRound: number | null,
+  previousClassification: { grupos: Record<string, unknown[]> },
+): { grupos: Record<string, unknown[]> } {
+  if (!shouldRecalculateLibertadoresClassification(targetRound)) return previousClassification;
+  return recalculateLibertadoresClassification(fases, previousClassification);
+}
+
 export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
   id: 'cartola_brasileirao_libertadores_v1',
   provider: KnownProviders.CARTOLA_BRASILEIRAO,
@@ -233,9 +243,7 @@ export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
       buildIdByName(ctx),
     );
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
-    const updatedClassification = shouldRecalculateLibertadoresClassification(targetRound)
-      ? recalculateLibertadoresClassification(updatedFases, previousClassification)
-      : previousClassification;
+    const updatedClassification = resolveLibertadoresClassification(updatedFases, targetRound, previousClassification);
 
     return { fases: updatedFases, classificacao: updatedClassification, teams };
   },
