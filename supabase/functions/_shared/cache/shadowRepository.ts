@@ -3,7 +3,7 @@ import type { TournamentCachePayload } from '../tournament/types.ts';
 import { diffPayloads, type CacheComparison } from './diff.ts';
 import { readLegacyTournament, type LegacyKeyReader } from './legacy/reader.ts';
 import { shadowKey } from './shadowKeys.ts';
-import { mergeCopaBrasilFasesPreservingScores, mergeFasesPreservingScores } from './roundPreservation.ts';
+import { mergeCopaBrasilFasesPreservingScores, mergeFasesPreservingScores, mergeLibertadoresFasesPreservingScores } from './roundPreservation.ts';
 
 /**
  * Repositório genérico de shadow mode:
@@ -113,7 +113,7 @@ function mergeForLeague(
   prev: Record<string, unknown> | null | undefined,
   next: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
-  return league === 'copa_brasil'
-    ? mergeCopaBrasilFasesPreservingScores(prev, next)
-    : mergeFasesPreservingScores(prev, next);
+  if (league === 'copa_brasil') return mergeCopaBrasilFasesPreservingScores(prev, next);
+  if (league === 'libertadores') return mergeLibertadoresFasesPreservingScores(prev, next);
+  return mergeFasesPreservingScores(prev, next);
 }
