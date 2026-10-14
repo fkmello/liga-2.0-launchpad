@@ -1,0 +1,60 @@
+name: Libertadores Cartola API smoke test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/libertadores-api-smoke.yml"
+      - "supabase/functions/_shared/providers/cartola-brasileirao/api-client.ts"
+      - "supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-api-smoke:
+    name: Read-only Cartola API check
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check a completed mapped round without touching Supabase
+        env:
+          CARTOLA_TEAM_ID: "50145709"
+          CARTOLA_ROUND: "28"
+        run: |
+          node --input-type=module <<'NODE'
+          const id = process.env.CARTOLA_TEAM_ID;
+          const round = Number(process.env.CARTOLA_ROUND);
+          const url = `https://api.cartola.globo.com/time/id/${id}/${round}`;
+
+          const response = await fetch(url, {
+            headers: { accept: "application/json" },
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Cartola API respondeu HTTP ${response.status} para rodada ${round}`);
+          }
+
+          const data = await response.json();
+          if (!data || typeof data !== "object" || Array.isArray(data)) {
+            throw new Error("A API não retornou um objeto JSON válido.");
+          }
+
+          console.log(JSON.stringify({
+            endpoint: "/time/id/{id}/{round}",
+            requestedRound: round,
+            responseRound: data.rodada_atual ?? null,
+            hasPoints: data.pontos !== undefined && data.pontos !== null,
+            pointsType: data.pontos === undefined || data.pontos === null ? null : typeof data.pontos,
+          }, null, 2));
+
+          if (Number(data.rodada_atual) !== round) {
+            throw new Error(`A API não confirmou a rodada solicitada: esperado ${round}, recebido ${data.rodada_atual ?? "ausente"}.`);
+          }
+          if (data.pontos === undefined || data.pontos === null || !Number.isFinite(Number(data.pontos))) {
+            throw new Error("A resposta não contém pontuação numérica para a rodada concluída.");
+          }
+
+          console.log("PASSOU: endpoint real confirmou rodada e pontuação. Nenhum banco foi acessado.");
+          NODE
