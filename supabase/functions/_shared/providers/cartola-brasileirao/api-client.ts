@@ -89,7 +89,8 @@ export async function fetchTeamRoundScore(id: string, rodada: number): Promise<n
   // A API devolve a última rodada disponível quando a solicitada ainda não
   // foi pontuada — só aceitamos quando a rodada bate.
   const rodadaResp = Number(json.rodada_atual);
-  if (Number.isInteger(rodadaResp) && rodadaResp !== rodada) return null;
+  // Sem a rodada explícita não é possível provar que a pontuação pertence ao pedido.
+  if (!Number.isInteger(rodadaResp) || rodadaResp !== rodada) return null;
 
   const pontos = Number(json.pontos);
   if (!Number.isFinite(pontos)) return null;
