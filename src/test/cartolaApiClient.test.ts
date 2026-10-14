@@ -27,6 +27,15 @@ describe('Cartola API client — pontuação por rodada', () => {
     await expect(fetchTeamRoundScore('50145709', 31)).resolves.toBeNull();
   });
 
+  it('ignora pontuação quando a resposta não informa a rodada', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ pontos: 88.5 }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+
+    await expect(fetchTeamRoundScore('50145709', 31)).resolves.toBeNull();
+  });
+
   it('trata ausência de pontuação como null, sem inventar zero', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ rodada_atual: 31, pontos: null }),
