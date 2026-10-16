@@ -55,7 +55,10 @@ export function createShadowRepository(opts: {
     },
 
     async compare(_key: string, next: TournamentCachePayload): Promise<CacheComparison> {
-      return diffPayloads(await repo.load(''), next);
+      return diffPayloads(await repo.load(''), next, {
+        league: opts.league,
+        semantic: opts.league === 'copa_brasil' || opts.league === 'libertadores',
+      });
     },
 
     async save(_key: string, payload: TournamentCachePayload, ctx: SaveContext) {
@@ -107,7 +110,7 @@ function isUsableShadow(payload: TournamentCachePayload | null): boolean {
 }
 
 
-/** Usa a lógica reforçada somente na Copa do Brasil; mantém as Séries A/B/C intactas. */
+/** Usa a lógica reforçada somente na Copa do Brasil e Libertadores; mantém as Séries A/B/C intactas. */
 function mergeForLeague(
   league: string,
   prev: Record<string, unknown> | null | undefined,
