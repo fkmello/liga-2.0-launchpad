@@ -24,6 +24,9 @@ const ROUND_TO_TARGET: Record<number, RoundTarget> = {
   37: { kind: 'knockout', fase: 'Final', leg: 'ida' },
 };
 
+/** Rodadas da API que correspondem a fases mapeadas da Libertadores. */
+export const LIBERTADORES_SYNCABLE_TARGET_ROUNDS = Object.keys(ROUND_TO_TARGET).map(Number);
+
 /** Só recalcula a classificação quando a rodada-alvo pertence à fase de grupos. */
 export function shouldRecalculateLibertadoresClassification(targetRound: number | null): boolean {
   return targetRound !== null && ROUND_TO_TARGET[targetRound]?.kind === 'group';
