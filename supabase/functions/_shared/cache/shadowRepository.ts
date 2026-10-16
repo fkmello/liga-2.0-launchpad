@@ -3,7 +3,7 @@ import type { TournamentCachePayload } from '../tournament/types.ts';
 import { diffPayloads, type CacheComparison } from './diff.ts';
 import { readLegacyTournament, type LegacyKeyReader } from './legacy/reader.ts';
 import { shadowKey } from './shadowKeys.ts';
-import { mergeCopaBrasilFasesPreservingScores, mergeFasesPreservingScores } from './roundPreservation.ts';
+import { mergeCopaBrasilFasesPreservingScores, mergeFasesPreservingScores, mergeLibertadoresFasesPreservingScores } from './roundPreservation.ts';
 
 /**
  * Repositório genérico de shadow mode:
@@ -55,7 +55,10 @@ export function createShadowRepository(opts: {
     },
 
     async compare(_key: string, next: TournamentCachePayload): Promise<CacheComparison> {
-      return diffPayloads(await repo.load(''), next);
+      return diffPayloads(await repo.load(''), next, {
+        league: opts.league,
+        semantic: opts.league === 'copa_brasil' || opts.league === 'libertadores',
+      });
     },
 
     async save(_key: string, payload: TournamentCachePayload, ctx: SaveContext) {
@@ -107,13 +110,13 @@ function isUsableShadow(payload: TournamentCachePayload | null): boolean {
 }
 
 
-/** Usa a lógica reforçada somente na Copa do Brasil; mantém as Séries A/B/C intactas. */
+/** Usa a lógica reforçada somente na Copa do Brasil e Libertadores; mantém as Séries A/B/C intactas. */
 function mergeForLeague(
   league: string,
   prev: Record<string, unknown> | null | undefined,
   next: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
-  return league === 'copa_brasil'
-    ? mergeCopaBrasilFasesPreservingScores(prev, next)
-    : mergeFasesPreservingScores(prev, next);
+  if (league === 'copa_brasil') return mergeCopaBrasilFasesPreservingScores(prev, next);
+  if (league === 'libertadores') return mergeLibertadoresFasesPreservingScores(prev, next);
+  return mergeFasesPreservingScores(prev, next);
 }

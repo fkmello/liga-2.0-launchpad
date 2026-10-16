@@ -164,7 +164,7 @@ export async function runPipeline(
 
   const comparison = diffPayloads(current, payload, {
     league: def.league,
-    semantic: opts.compare === true,
+    semantic: def.league === 'libertadores' || (def.league === 'copa_brasil' && opts.compare === true),
   });
   const fields = Object.keys(comparison.diff);
   const status = resolveCompareStatus(fields);

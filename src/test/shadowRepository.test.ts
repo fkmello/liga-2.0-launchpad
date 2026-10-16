@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createShadowRepository } from '../../supabase/functions/_shared/cache/shadowRepository';
-import { mergeFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
+import { mergeFasesPreservingScores, mergeLibertadoresFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
 import { runPipeline } from '../../supabase/functions/_shared/sync/pipeline/index';
 import { resolveDefinition } from '../../supabase/functions/_shared/tournament/registry';
 import type { TournamentCachePayload } from '../../supabase/functions/_shared/tournament/types';
+import { diffPayloads } from '../../supabase/functions/_shared/cache/diff';
+import { fetchCartolaTeam } from '../../supabase/functions/_shared/providers/cartola-brasileirao/api-client';
 
 // ─────────────────────────────────────────────────────────────
 // Fixtures: 4 times, 2 confrontos por rodada
@@ -160,6 +162,38 @@ describe('mergeFasesPreservingScores', () => {
   });
 });
 
+describe('mergeLibertadoresFasesPreservingScores', () => {
+  it('preserva placares dentro de rodada e grupo quando a nova versão vem vazia', () => {
+    const previous = {
+      'Fase de Grupos': {
+        rodada_1: { groups: [{ name: 'GRUPO A', matches: [{ team1: 'Time A', team2: 'Time B', score1: '77,00', score2: '55,00' }] }] },
+      },
+    };
+    const next = {
+      'Fase de Grupos': {
+        rodada_1: { groups: [{ name: 'GRUPO A', matches: [{ team1: 'Time A', team2: 'Time B', score1: '', score2: '' }] }] },
+      },
+    };
+
+    const merged = mergeLibertadoresFasesPreservingScores(previous, next);
+    const match = (merged['Fase de Grupos'] as any).rodada_1.groups[0].matches[0];
+    expect(match.score1).toBe('77,00');
+    expect(match.score2).toBe('55,00');
+  });
+
+  it('preserva placares de ida e volta no mata-mata', () => {
+    const previous = { 'Oitavas de Final': { matches: [{ team1: 'Time A', team2: 'Time B', scoreIda1: '70,00', scoreIda2: '60,00', scoreVolta1: '80,00', scoreVolta2: '65,00' }] } };
+    const next = { 'Oitavas de Final': { matches: [{ team1: 'Time A', team2: 'Time B', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' }] } };
+
+    const merged = mergeLibertadoresFasesPreservingScores(previous, next);
+    const match = (merged['Oitavas de Final'] as any).matches[0];
+    expect(match.scoreIda1).toBe('70,00');
+    expect(match.scoreIda2).toBe('60,00');
+    expect(match.scoreVolta1).toBe('80,00');
+    expect(match.scoreVolta2).toBe('65,00');
+  });
+});
+
 describe('ShadowRepository — histórico cumulativo', () => {
   beforeEach(() => installFetchStub());
   afterEach(() => vi.unstubAllGlobals());
@@ -215,5 +249,52 @@ describe('ShadowRepository — histórico cumulativo', () => {
     const saved = store.get(SHADOW_KEY);
     expect(scoredCount(saved, 25)).toBe(2); // alvo = 26 - 1
     expect(scoredCount(saved, 26)).toBe(0); // rodada em curso segue sem placar
+  });
+});
+
+
+describe('Cartola team shield preference', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('prefere url_escudo_svg quando a API fornece SVG e PNG', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        time: {
+          nome: 'Time Teste',
+          url_escudo_svg: 'https://exemplo.test/escudo.svg',
+          url_escudo_png: 'https://exemplo.test/escudo.png',
+        },
+      }),
+      text: async () => '',
+    }));
+
+    const team = await fetchCartolaTeam('123');
+    expect(team?.escudo).toBe('https://exemplo.test/escudo.svg');
+  });
+});
+
+describe('Comparação semântica de times da Libertadores', () => {
+  it('não acusa divergência quando só a URL do escudo muda', () => {
+    const current = shadowPayload({});
+    const next = shadowPayload({});
+    current.dados_externos = { rows: [['Time A', '101', 'https://cdn.test/antigo.svg']] };
+    next.dados_externos = { rows: [['Time A', '101', 'https://cdn.test/novo.svg']] };
+
+    const comparison = diffPayloads(current, next, { league: 'libertadores', semantic: true });
+    expect(comparison.diff.dados_externos).toBeUndefined();
+    expect(comparison.changed).toBe(false);
+  });
+
+  it('continua acusando divergência quando muda o nome ou ID do time', () => {
+    const current = shadowPayload({});
+    const next = shadowPayload({});
+    current.dados_externos = { rows: [['Time A', '101', 'https://cdn.test/a.svg']] };
+    next.dados_externos = { rows: [['Time A alterado', '101', 'https://cdn.test/b.svg']] };
+
+    const comparison = diffPayloads(current, next, { league: 'libertadores', semantic: true });
+    expect(comparison.diff.dados_externos).toBeDefined();
+    expect(comparison.changed).toBe(true);
   });
 });
