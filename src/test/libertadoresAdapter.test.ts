@@ -92,9 +92,9 @@ describe('Libertadores adapter', () => {
       expect(resolveLibertadoresClassification(fases, round, previous)).toBe(previous);
     }
   });
-  it('registra sincronização API apenas em shadow e mantém o cron desabilitado durante a validação', () => {
+  it('registra sincronização API em shadow e mantém o cache oficial protegido com cron habilitado', () => {
     const { def } = resolveDefinition('libertadores');
-    expect(def.persistMode).toBe('shadow'); expect(def.activeSync).toBe('api'); expect(def.cron?.enabled).toBe(false);
+    expect(def.persistMode).toBe('shadow'); expect(def.activeSync).toBe('api'); expect(def.cron?.enabled).toBe(true);
     expect(selectAdapters(def).map(a => a.id)).toEqual(['cartola_brasileirao_libertadores_v1']);
   });
   it('converte o cache legado preservando jogos, classificação e times', async () => {
