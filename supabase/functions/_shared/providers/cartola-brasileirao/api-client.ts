@@ -22,7 +22,9 @@ export async function fetchCartolaTeam(id: string): Promise<CartolaTeamRaw | nul
     return {
       id_cartola: String(id),
       nome: String(time.nome ?? time.nome_cartola ?? ''),
-      escudo: time.url_escudo_png ?? time.url_escudo_svg ?? null,
+      // Preferir SVG: em testes reais ele foi mais confiável para o uso na planilha.
+      // PNG fica como fallback caso a API não forneça o SVG.
+      escudo: time.url_escudo_svg ?? time.url_escudo_png ?? null,
     };
   } catch (_e) {
     return null;
