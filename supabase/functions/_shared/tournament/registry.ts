@@ -1,10 +1,10 @@
 import type { TournamentAdapter, TournamentDefinition } from './types.ts';
 import { cartolaCopaAdapter } from '../providers/cartola-copa/adapter.ts';
-import { cartolaCopaBrasilAdapter } from '../providers/cartola-brasileirao/adapter-copa-brasil.ts';
+import { cartolaCopaBrasilAdapter, COPA_BRASIL_SYNCABLE_TARGET_ROUNDS } from '../providers/cartola-brasileirao/adapter-copa-brasil.ts';
 import { cartolaBrasileiraoAdapter } from '../providers/cartola-brasileirao/adapter.ts';
 import { cartolaBrasileiraoSerieBAdapter } from '../providers/cartola-brasileirao/adapter-serie-b.ts';
 import { cartolaBrasileiraoSerieCAdapter } from '../providers/cartola-brasileirao/adapter-serie-c.ts';
-import { cartolaLibertadoresAdapter } from '../providers/cartola-brasileirao/adapter-libertadores.ts';
+import { cartolaLibertadoresAdapter, LIBERTADORES_SYNCABLE_TARGET_ROUNDS } from '../providers/cartola-brasileirao/adapter-libertadores.ts';
 
 /**
  * Registry = única fonte de verdade. Nenhum cache_key, season, version ou
@@ -24,7 +24,7 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaCopaBrasilAdapter],
     adapterPrecedence: { cartola_brasileirao_copa_brasil_v1: 10 },
     // Ativação preparada após validação do payload shadow; sem escrita na cache oficial.
-    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: COPA_BRASIL_SYNCABLE_TARGET_ROUNDS },
   },
   brasileirao_serie_a: {
     league: 'brasileirao_serie_a', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
@@ -50,7 +50,7 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaLibertadoresAdapter],
     adapterPrecedence: { cartola_brasileirao_libertadores_v1: 10 },
     // Ativação manual após validar o payload shadow; evita gravações automáticas prematuras.
-    cron: { enabled: false, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: LIBERTADORES_SYNCABLE_TARGET_ROUNDS },
   },
   brasileirao_serie_b: {
     league: 'brasileirao_serie_b', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
