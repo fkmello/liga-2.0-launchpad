@@ -4,6 +4,7 @@ import { fetchFromCache, fetchWithFallback } from '@/lib/sheetsCache';
 import { isConsolidatedTournament, useTournamentPayload } from '@/hooks/useTournamentPayload';
 import type { StandingRow } from '@/types/tournament';
 import { USE_CONSOLIDATED_LIBERTADORES } from '@/config/featureFlags';
+import { DEFAULT_SEASON } from '@/config/tournamentCacheKeys';
 
 
 export interface Confronto {
@@ -230,7 +231,7 @@ export function useConfrontosLibertadoresGrupos(rodada: number) {
     queryKey: ['confrontos-libertadores-grupos', rodada],
     queryFn: async () => {
       if (USE_CONSOLIDATED_LIBERTADORES) {
-        const shadow = await fetchFromCache<any>('shadow/libertadores/2026');
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
         const round = shadow?.fases?.['Fase de Grupos']?.[`rodada_${rodada}`];
         if (round && Array.isArray(round.groups)) {
           return {
@@ -257,7 +258,7 @@ export function useDadosExternosLibertadores() {
     queryKey: ['dados-externos-libertadores'],
     queryFn: async () => {
       if (USE_CONSOLIDATED_LIBERTADORES) {
-        const shadow = await fetchFromCache<any>('shadow/libertadores/2026');
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
         const rows = shadow?.dados_externos?.rows;
         if (Array.isArray(rows) && rows.length > 0) {
           return { headers: [], rows, raw: rows };
@@ -279,7 +280,7 @@ export function useClassificacaoLibertadores() {
     queryKey: ['classificacao-libertadores'],
     queryFn: async () => {
       if (USE_CONSOLIDATED_LIBERTADORES) {
-        const shadow = await fetchFromCache<any>('shadow/libertadores/2026');
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
         const standings = shadow?.classificacao?.grupos;
         if (standings && typeof standings === 'object' && Object.keys(standings).length > 0) {
           return {
@@ -307,7 +308,7 @@ export function useConfrontosLibertadores(fase: string) {
     queryKey: ['confrontos-libertadores', fase],
     queryFn: async () => {
       if (USE_CONSOLIDATED_LIBERTADORES) {
-        const shadow = await fetchFromCache<any>('shadow/libertadores/2026');
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
         const phase = shadow?.fases?.[fase];
         if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
         console.warn(`[libertadores] fase shadow "${fase}" inválida; usando cache oficial`);
