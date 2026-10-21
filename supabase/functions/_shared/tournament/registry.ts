@@ -16,7 +16,8 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     cacheKey: (season) => (season === 2026 ? 'copa_mundo' : `copa_mundo:${season}`), cacheType: 'copa_mundo',
     version: 1, schema_version: 1, standingsPreset: 'FIFA', mergeableKeys: ['fases.fase_grupos'], adapters: [cartolaCopaAdapter],
     adapterPrecedence: { cartola_copa_v1: 10 },
-    cron: { enabled: true, statusProvider: 'cartola_copa', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
+    // Torneio suspenso: manter definição e histórico, mas não consultar a API automaticamente.
+    cron: { enabled: false, statusProvider: 'cartola_copa', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60 },
   },
   copa_brasil: {
     league: 'copa_brasil', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
