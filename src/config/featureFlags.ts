@@ -22,5 +22,5 @@ export const USE_CONSOLIDATED_SERIE_B = true;
 /** Série C preparada no Shadow e agora ativada para leitura consolidada no frontend. */
 export const USE_CONSOLIDATED_SERIE_C = true;
 
-/** Libertadores: false mantém a leitura oficial/manual da planilha; true lê o payload shadow da sincronização automática. */
-export const USE_CONSOLIDATED_LIBERTADORES = false;
+/** Libertadores: true habilita leitura do payload shadow apenas nesta branch de teste isolada. */
+export const USE_CONSOLIDATED_LIBERTADORES = true;
