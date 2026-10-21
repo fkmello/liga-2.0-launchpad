@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchFromCache, fetchWithFallback } from '@/lib/sheetsCache';
 import { isConsolidatedTournament, useTournamentPayload } from '@/hooks/useTournamentPayload';
 import type { StandingRow } from '@/types/tournament';
+import { USE_CONSOLIDATED_LIBERTADORES } from '@/config/featureFlags';
+import { DEFAULT_SEASON } from '@/config/tournamentCacheKeys';
 
 
 export interface Confronto {
@@ -227,11 +229,25 @@ export function useConfrontosCopa(fase: string) {
 export function useConfrontosLibertadoresGrupos(rodada: number) {
   return useQuery<LibertadoresGroupMatchesData>({
     queryKey: ['confrontos-libertadores-grupos', rodada],
-    queryFn: () => fetchWithFallback<LibertadoresGroupMatchesData>(
-      'libertadores',
-      { action: 'confrontos_libertadores_grupos', rodada: rodada.toString() },
-      (d) => d?.grupos?.[`rodada_${rodada}`]
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_LIBERTADORES) {
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
+        const round = shadow?.fases?.['Fase de Grupos']?.[`rodada_${rodada}`];
+        if (round && Array.isArray(round.groups)) {
+          return {
+            tournament: String(round.tournament ?? ''),
+            round: String(round.round ?? `Rodada ${rodada}`),
+            groups: round.groups,
+          };
+        }
+        console.warn('[libertadores] payload shadow sem rodada de grupos válida; usando cache oficial');
+      }
+      return fetchWithFallback<LibertadoresGroupMatchesData>(
+        'libertadores',
+        { action: 'confrontos_libertadores_grupos', rodada: rodada.toString() },
+        (d) => d?.grupos?.[`rodada_${rodada}`]
+      );
+    },
     staleTime: 5 * 60 * 1000,
     enabled: rodada >= 1 && rodada <= 6,
   });
@@ -240,11 +256,21 @@ export function useConfrontosLibertadoresGrupos(rodada: number) {
 export function useDadosExternosLibertadores() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-libertadores'],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'libertadores',
-      { action: 'dados_externos_libertadores' },
-      (d) => d?.dados_externos
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_LIBERTADORES) {
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
+        const rows = shadow?.dados_externos?.rows;
+        if (Array.isArray(rows) && rows.length > 0) {
+          return { headers: [], rows, raw: rows };
+        }
+        console.warn('[libertadores] dados externos shadow inválidos; usando cache oficial');
+      }
+      return fetchWithFallback<DadosExternosData>(
+        'libertadores',
+        { action: 'dados_externos_libertadores' },
+        (d) => d?.dados_externos
+      );
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
@@ -252,11 +278,31 @@ export function useDadosExternosLibertadores() {
 export function useClassificacaoLibertadores() {
   return useQuery<LibertadoresGroupData>({
     queryKey: ['classificacao-libertadores'],
-    queryFn: () => fetchWithFallback<LibertadoresGroupData>(
-      'libertadores',
-      { action: 'classificacao_libertadores' },
-      (d) => d?.classificacao
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_LIBERTADORES) {
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
+        const standings = shadow?.classificacao?.grupos;
+        if (standings && typeof standings === 'object' && Object.keys(standings).length > 0) {
+          return {
+            groups: Object.entries(standings).map(([name, rows]) => ({
+              name,
+              headers: ['', name, '', 'P', 'J', 'V', 'E', 'D', 'PF', 'SG'],
+              // O cache legado tem 9 colunas; insere PF vazio antes do SG para manter
+              // o mesmo contrato de 10 colunas produzido pelo recálculo shadow.
+              rows: Array.isArray(rows) ? rows.map((row: any) =>
+                Array.isArray(row) && row.length === 9 ? [...row.slice(0, 8), '', row[8]] : row
+              ) : [],
+            })),
+          };
+        }
+        console.warn('[libertadores] classificação shadow inválida; usando cache oficial');
+      }
+      return fetchWithFallback<LibertadoresGroupData>(
+        'libertadores',
+        { action: 'classificacao_libertadores' },
+        (d) => d?.classificacao
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -264,11 +310,19 @@ export function useClassificacaoLibertadores() {
 export function useConfrontosLibertadores(fase: string) {
   return useQuery<ConfrontosCopaData>({
     queryKey: ['confrontos-libertadores', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'libertadores',
-      { action: 'confrontos_libertadores', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_LIBERTADORES) {
+        const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
+        const phase = shadow?.fases?.[fase];
+        if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
+        console.warn(`[libertadores] fase shadow "${fase}" inválida; usando cache oficial`);
+      }
+      return fetchWithFallback<ConfrontosCopaData>(
+        'libertadores',
+        { action: 'confrontos_libertadores', fase },
+        (d) => d?.fases?.[fase]
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -31,6 +31,9 @@ const ROUND_TO_PHASE_LEG: Record<number, { fase: string; leg: CupLeg }> = {
   38: { fase: 'Final', leg: 'ida' },
 };
 
+/** Rodadas da API que correspondem a fases mapeadas da Copa do Brasil. */
+export const COPA_BRASIL_SYNCABLE_TARGET_ROUNDS = Object.keys(ROUND_TO_PHASE_LEG).map(Number);
+
 function normalizeName(value: unknown): string {
   return String(value ?? '')
     .normalize('NFD')

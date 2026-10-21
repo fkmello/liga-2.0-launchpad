@@ -48,6 +48,8 @@ export interface TournamentCronConfig {
   firstSyncWindowMinutes?: number;
   /** Atraso da Sync #2 contado a partir de first_sync_at. Padrão 60. */
   secondSyncDelayMinutes?: number;
+  /** Rodadas-alvo da API Cartola aceitas pelo adaptador; ausente = todas (ex.: Brasileirão). */
+  syncableTargetRounds?: number[];
 }
 
 export interface TournamentDefinition {

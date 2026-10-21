@@ -7,7 +7,7 @@ export interface CacheComparison {
 }
 
 export interface CacheDiffOptions {
-  /** Enables semantic comparison only for the named tournament and only in audit mode. */
+  /** Enables semantic comparison only for supported tournaments and only in audit mode. */
   league?: string;
   semantic?: boolean;
 }
@@ -27,10 +27,10 @@ export function diffPayloads(
     if (
       section === 'dados_externos' &&
       options.semantic === true &&
-      options.league === 'copa_brasil'
+      (options.league === 'copa_brasil' || options.league === 'libertadores')
     ) {
-      const semanticCurrent = canonicalCopaBrasilTeams(current?.dados_externos);
-      const semanticNext = canonicalCopaBrasilTeams(next.dados_externos);
+      const semanticCurrent = canonicalTeamIdentity(current?.dados_externos);
+      const semanticNext = canonicalTeamIdentity(next.dados_externos);
       // Use semantic comparison only when both shapes are safely interpretable.
       // Otherwise compare both sides strictly to avoid mixing representations.
       if (semanticCurrent !== null && semanticNext !== null) {
@@ -51,11 +51,11 @@ export function diffPayloads(
 }
 
 /**
- * Copa do Brasil audit only: compare team identity (name + Cartola ID),
- * ignoring legacy/new container shape and shield URL differences.
- * Returns null for unrecognized/empty data so the caller uses strict comparison.
+ * Auditoria semântica de times: compara identidade (nome + ID Cartola),
+ * ignorando URLs de escudo e diferenças de formato do contêiner.
+ * Retorna null para dados não reconhecidos/vazios; nesse caso, usa comparação estrita.
  */
-function canonicalCopaBrasilTeams(value: unknown): string | null {
+function canonicalTeamIdentity(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null;
 
   const section = value as { rows?: unknown; raw?: unknown };
@@ -73,7 +73,7 @@ function canonicalCopaBrasilTeams(value: unknown): string | null {
     if (!Array.isArray(item) || item.length < 2) continue;
     const name = String(item[0] ?? '').trim().replace(/\s+/g, ' ');
     const id = String(item[1] ?? '').trim();
-    // The legacy raw matrix may include a header row.
+    // A matriz legada pode incluir uma linha de cabeçalho.
     if (!name && id.toLowerCase() === 'id') continue;
     if (!name || !id || id.toLowerCase() === 'id') continue;
     teams.push({ id, name });

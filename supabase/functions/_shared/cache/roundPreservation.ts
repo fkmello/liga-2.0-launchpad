@@ -116,6 +116,74 @@ function mergeCopaPhaseMatches(prev: unknown, next: unknown): unknown {
   return { ...(prevPhase as Fase), ...(nextPhase as Fase), matches: mergedMatches };
 }
 
+/**
+ * Mesclagem da Libertadores: preserva placares também dentro de
+ * Fase de Grupos -> rodada_N -> groups -> matches, além do mata-mata.
+ */
+function mergeLibertadoresGroupRound(prev: unknown, next: unknown): unknown {
+  const prevRound = prev as Fase | undefined;
+  const nextRound = next as Fase | undefined;
+  const prevGroups = prevRound?.groups;
+  const nextGroups = nextRound?.groups;
+  if (!Array.isArray(prevGroups)) return next;
+  if (!Array.isArray(nextGroups)) {
+    return { ...(prevRound ?? {}), ...(nextRound ?? {}), groups: prevGroups };
+  }
+
+  const groupKey = (group: Record<string, any>) => String(group?.name ?? '').trim().toLowerCase();
+  const previousByName = new Map<string, Record<string, any>>();
+  for (const group of prevGroups as Record<string, any>[]) {
+    const name = groupKey(group);
+    if (name) previousByName.set(name, group);
+  }
+
+  const nextNames = new Set<string>();
+  const mergedGroups = (nextGroups as Record<string, any>[]).map((group) => {
+    const name = groupKey(group);
+    if (name) nextNames.add(name);
+    const previous = name ? previousByName.get(name) : undefined;
+    return previous ? mergeCopaPhaseMatches(previous, group) : group;
+  });
+
+  for (const previous of prevGroups as Record<string, any>[]) {
+    const name = groupKey(previous);
+    const hasScores = (Array.isArray(previous?.matches) ? previous.matches : [])
+      .some((match: Record<string, any>) => SCORE_FIELDS.some((field) => isFilled(match?.[field])));
+    if (hasScores && name && !nextNames.has(name)) mergedGroups.push(previous);
+  }
+
+  return { ...(prevRound as Fase), ...(nextRound as Fase), groups: mergedGroups };
+}
+
+export function mergeLibertadoresFasesPreservingScores(
+  prev: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const a = prev ?? {};
+  const b = next ?? {};
+  const out: Record<string, unknown> = { ...a, ...b };
+
+  for (const key of Object.keys(a)) {
+    if (!(key in b)) continue;
+    if (key === 'Fase de Grupos') {
+      const prevStage = a[key] as Fase | undefined;
+      const nextStage = b[key] as Fase | undefined;
+      const prevRounds = prevStage ?? {};
+      const nextRounds = nextStage ?? {};
+      const mergedRounds: Fase = { ...prevRounds, ...nextRounds };
+      for (const roundKey of Object.keys(prevRounds)) {
+        if (roundKey in nextRounds) {
+          mergedRounds[roundKey] = mergeLibertadoresGroupRound(prevRounds[roundKey], nextRounds[roundKey]);
+        }
+      }
+      out[key] = { ...prevStage, ...nextStage, ...mergedRounds };
+    } else {
+      out[key] = mergeCopaPhaseMatches(a[key], b[key]);
+    }
+  }
+  return out;
+}
+
 /** Merge específico da Copa do Brasil: preserva placares de ida/volta campo a campo. */
 export function mergeCopaBrasilFasesPreservingScores(
   prev: Record<string, unknown> | null | undefined,

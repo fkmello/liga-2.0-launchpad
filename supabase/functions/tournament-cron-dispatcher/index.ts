@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { listTournaments, resolveDefinition } from '../_shared/tournament/registry.ts';
 import { resolveStatusProvider } from '../_shared/tournament/statusProviders.ts';
+import { isMarketRoundSyncable } from '../_shared/tournament/roundEligibility.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +27,7 @@ type Decision =
   | 'SKIP_CLOSED'
   | 'MARKET_OPENED'
   | 'WAIT_WINDOW'
+  | 'SKIP_NO_TARGET'
   | 'SYNC_1'
   | 'SYNC_2'
   | 'SKIP_DONE'
@@ -231,6 +233,30 @@ Deno.serve(async (req) => {
           last_sync_status: 'SKIPPED',
         });
         push('MARKET_OPENED', { last_sync_phase: 'NONE' });
+        continue;
+      }
+
+      // Copas e torneios continentais só sincronizam quando a rodada anterior
+      // do Cartola corresponde a uma fase que o adaptador sabe atualizar.
+      // Séries A/B/C não configuram esta lista e mantêm o comportamento atual.
+      if (!isMarketRoundSyncable(round, def.cron.syncableTargetRounds)) {
+        const targetRound = round - 1;
+        await patchState(db, state.id, {
+          market_status: status,
+          current_round: round,
+          synced_round: round,
+          first_sync_at: null,
+          second_sync_done: true,
+          last_sync_phase: 'NONE',
+          last_sync_status: 'SKIPPED',
+          last_error: null,
+          last_error_at: null,
+        });
+        push('SKIP_NO_TARGET', {
+          target_round: targetRound,
+          reason: 'NO_MAPPED_TARGET_ROUND',
+          last_sync_phase: 'NONE',
+        });
         continue;
       }
 

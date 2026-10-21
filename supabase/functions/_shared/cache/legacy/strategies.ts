@@ -99,6 +99,37 @@ function parseClassificacaoMatrix(raw: any): unknown[] {
 
 
 /**
+ * Cache legado continental: { fases, grupos, classificacao.groups, dados_externos }.
+ * Os jogos de grupos são incorporados às fases normalizadas para atualização incremental.
+ */
+export function continentalSingleKeyStrategy(cacheKey: string): LegacyStrategy {
+  return {
+    id: 'continental-single-key',
+    async read(ctx) {
+      const data = await ctx.read(cacheKey);
+      if (!data) return null;
+      const fases = { ...(data.fases ?? {}) };
+      if (data.grupos && typeof data.grupos === 'object') fases['Fase de Grupos'] = data.grupos;
+      const sourceGroups = Array.isArray(data.classificacao?.groups) ? data.classificacao.groups : [];
+      const grupos = sourceGroups.length
+        ? Object.fromEntries(sourceGroups.map((group: any) => [
+            String(group?.name ?? '').trim() || 'Grupo',
+            Array.isArray(group?.rows) ? group.rows : [],
+          ]))
+        : (data.classificacao?.grupos ?? {});
+      return {
+        version: data.version ?? 0,
+        synced_at: data.synced_at ?? '',
+        fases,
+        classificacao: { grupos },
+        dados_externos: { rows: Array.isArray(data.dados_externos?.rows) ? data.dados_externos.rows : [] },
+        metadata: data.metadata,
+      };
+    },
+  };
+}
+
+/**
  * ÚNICO ponto da arquitetura que conhece formatos legados.
  * Adicionar um torneio = adicionar uma entrada aqui.
  */
@@ -111,4 +142,5 @@ export const LEGACY_STRATEGIES: Record<string, LegacyStrategy> = {
   brasileirao_serie_b: multiKeyLeagueStrategy({ legacyLeague: 'serie_b', maxRodada: 38 }),
   brasileirao_serie_c: multiKeyLeagueStrategy({ legacyLeague: 'serie_c', maxRodada: 38 }),
   champions: singleKeyStrategy(() => 'campeoes'),
+  libertadores: continentalSingleKeyStrategy('libertadores'),
 };
