@@ -286,8 +286,12 @@ export function useClassificacaoLibertadores() {
           return {
             groups: Object.entries(standings).map(([name, rows]) => ({
               name,
-              headers: ['', name, '', 'P', 'J', 'V', 'E', 'D', 'SG'],
-              rows: Array.isArray(rows) ? rows : [],
+              headers: ['', name, '', 'P', 'J', 'V', 'E', 'D', 'PF', 'SG'],
+              // O cache legado tem 9 colunas; insere PF vazio antes do SG para manter
+              // o mesmo contrato de 10 colunas produzido pelo recálculo shadow.
+              rows: Array.isArray(rows) ? rows.map((row: any) =>
+                Array.isArray(row) && row.length === 9 ? [...row.slice(0, 8), '', row[8]] : row
+              ) : [],
             })),
           };
         }
