@@ -23,4 +23,4 @@ export const USE_CONSOLIDATED_SERIE_B = true;
 export const USE_CONSOLIDATED_SERIE_C = true;
 
 /** Libertadores: false mantém a leitura oficial/manual da planilha; true lê o payload shadow da sincronização automática. */
-export const USE_CONSOLIDATED_LIBERTADORES = false;
+export const USE_CONSOLIDATED_LIBERTADORES = true;
