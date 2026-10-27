@@ -1,4 +1,3 @@
-import { useTournamentFinished } from '@/hooks/useTournamentFinished';
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -12,6 +11,7 @@ import {
   type Confronto,
 } from '@/hooks/useGoogleSheets';
 import CupMatchCard from './CupMatchCard';
+import TournamentPodium from './TournamentPodium';
 import MatchCard from './MatchCard';
 import { canCompareContinental, buildTeamIdMap, CONTINENTAL_ALLOWED_ROUNDS } from '@/utils/matchComparison';
 import { usePartialScores } from '@/hooks/usePartialScores';
@@ -59,7 +59,6 @@ interface LibertadoresViewProps {
 }
 
 const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
-  const { finished } = useTournamentFinished(slug);
   const navigate = useNavigate();
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
@@ -131,6 +130,45 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     () => buildIsUserTeamById(teamNameToId, userIds, userTeamNames),
     [teamNameToId, userIds, userTeamNames],
   );
+
+  const automaticPodium = useMemo(() => {
+    if (!isFinal || !Array.isArray(knockoutData?.matches)) return null;
+    const normalizeLabel = (value: unknown) => String(value ?? '').normalize('NFD')
+      .replace(/[\\u0300-\\u036f]/g, '').toUpperCase();
+    const finalMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber) === 'FINAL') as any;
+    const thirdMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber).includes('3') &&
+      normalizeLabel(match.matchNumber).includes('LUGAR')) as any;
+    const winnerOf = (match: any) => {
+      if (!match?.team1 || !match?.team2) return null;
+      const scores = [match.scoreIda1, match.scoreIda2, match.scoreVolta1, match.scoreVolta2];
+      if (scores.some(value => value === null || value === undefined || String(value).trim() === '')) return null;
+      const values = scores.map(value => Number(String(value).replace(',', '.')));
+      if (values.some(value => !Number.isFinite(value))) return null;
+      const total1 = values[0] + values[2];
+      const total2 = values[1] + values[3];
+      const manualWinner = String(match.manualWinner ?? '');
+      if (total1 === total2) {
+        if (manualWinner === match.team1) return { winner: match.team1, loser: match.team2 };
+        if (manualWinner === match.team2) return { winner: match.team2, loser: match.team1 };
+        return null;
+      }
+      return total1 > total2
+        ? { winner: match.team1, loser: match.team2 }
+        : { winner: match.team2, loser: match.team1 };
+    };
+    const finalResult = winnerOf(finalMatch);
+    const thirdResult = winnerOf(thirdMatch);
+    if (!finalResult || !thirdResult) return null;
+    const badgeFor = (team: string) => badgeUrls[team] || badgeUrls[team.toUpperCase()] || badgeUrls[normalizeName(team)] || '';
+    return {
+      champion: finalResult.winner,
+      championBadge: badgeFor(finalResult.winner),
+      runnerUp: finalResult.loser,
+      runnerUpBadge: badgeFor(finalResult.loser),
+      third: thirdResult.winner,
+      thirdBadge: badgeFor(thirdResult.winner),
+    };
+  }, [isFinal, knockoutData, badgeUrls]);
 
   // Determine the active Cartola round for partial scores
   const activeCartolaRound = useMemo(() => {
@@ -482,35 +520,19 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           </p>
         )}
 
-        {/* Podium for Final */}
-        {finished && knockoutData.podium && knockoutData.podium.some(p => p.team) && (
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-yellow-500" />
-              <h3 className="text-sm font-bold text-foreground">Premiação</h3>
-            </div>
-            {knockoutData.podium.map((entry) => {
-              const isChamp = entry.position === 1;
-              return (
-                <div key={entry.position}
-                  className={`flex items-center gap-3 rounded-lg border p-3 ${isChamp ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-card border-border'}`}>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
-                    entry.position === 1 ? 'bg-yellow-500 text-yellow-950' :
-                    entry.position === 2 ? 'bg-gray-300 text-gray-800' : 'bg-amber-700 text-amber-100'
-                  }`}>
-                    {entry.position}º
-                  </div>
-                  {entry.badge && (
-                    <img src={entry.badge} alt={entry.team} className={`object-contain ${isChamp ? 'w-10 h-10' : 'w-8 h-8'}`}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  )}
-                  <span className={`font-semibold ${isChamp ? 'text-base text-foreground' : 'text-sm text-muted-foreground'}`}>
-                    {entry.team}
-                  </span>
-                  {isChamp && <Trophy className="w-4 h-4 text-yellow-500 ml-auto" />}
-                </div>
-              );
-            })}
+        {/* Libertadores podium appears automatically when final and third-place results are complete. */}
+        {automaticPodium && (
+          <div className="mt-6">
+            <TournamentPodium
+              title="Premiação da Libertadores"
+              champion={automaticPodium.champion}
+              championBadge={automaticPodium.championBadge}
+              runnerUp={automaticPodium.runnerUp}
+              runnerUpBadge={automaticPodium.runnerUpBadge}
+              third={automaticPodium.third}
+              thirdBadge={automaticPodium.thirdBadge}
+              isUserTeam={isUserTeam}
+            />
           </div>
         )}
       </div>
