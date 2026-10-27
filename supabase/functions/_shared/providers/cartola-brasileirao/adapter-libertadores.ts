@@ -1,5 +1,6 @@
 import type { AdapterContext, TournamentAdapter } from '../../tournament/types.ts';
 import { KnownProviders } from '../../sync/providers.ts';
+import { resolveLibertadoresProgression } from './libertadores-progression.ts';
 import { fetchCartolaTeams, fetchMercadoStatus, fetchTeamsRoundScores, type CartolaTeamRaw } from './api-client.ts';
 
 type ContinentalMatch = Record<string, any>;
@@ -298,8 +299,9 @@ export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
     const fasesWithFinalists = resolveLibertadoresFinalists(updatedFases);
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
     const updatedClassification = resolveLibertadoresClassification(fasesWithFinalists, targetRound, previousClassification);
+    const progressedFases = resolveLibertadoresProgression(fasesWithFinalists, updatedClassification);
 
-    return { fases: fasesWithFinalists, classificacao: updatedClassification, teams };
+    return { fases: progressedFases, classificacao: updatedClassification, teams };
   },
   toFases(raw) { return raw.fases; },
   toClassificacao(raw) { return raw.classificacao; },
