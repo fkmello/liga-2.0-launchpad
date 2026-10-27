@@ -17,6 +17,7 @@ import { canCompareContinental, buildTeamIdMap, CONTINENTAL_ALLOWED_ROUNDS } fro
 import { usePartialScores } from '@/hooks/usePartialScores';
 import { useUserTeamIds, buildIsUserTeamById } from '@/hooks/useUserTeamIds';
 import { useUserTeamNames } from '@/hooks/useUserTeamNames';
+import { resolveLibertadoresFinalResult } from '@/utils/libertadoresResults';
 
 const FASES = [
   'Classificação',
@@ -137,31 +138,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     const finalMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber) === 'FINAL') as any;
     const thirdMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber).includes('3') &&
       normalizeLabel(match.matchNumber).includes('LUGAR')) as any;
-    const winnerOf = (match: any) => {
-      if (!match?.team1 || !match?.team2) return null;
-      const firstLeg = [match.scoreIda1, match.scoreIda2];
-      if (firstLeg.some(value => value === null || value === undefined || String(value).trim() === '')) return null;
-      const values = firstLeg.map(value => Number(String(value).replace(',', '.')));
-      if (values.some(value => !Number.isFinite(value))) return null;
-      const hasSecondLeg = [match.scoreVolta1, match.scoreVolta2].every(value =>
-        value !== null && value !== undefined && String(value).trim() !== ''
-      );
-      const secondLeg = hasSecondLeg
-        ? [Number(String(match.scoreVolta1).replace(',', '.')), Number(String(match.scoreVolta2).replace(',', '.'))]
-        : [0, 0];
-      if (secondLeg.some(value => !Number.isFinite(value))) return null;
-      const total1 = values[0] + secondLeg[0];
-      const total2 = values[1] + secondLeg[1];
-      const manualWinner = String(match.manualWinner ?? '');
-      if (total1 === total2) {
-        if (manualWinner === match.team1) return { winner: match.team1, loser: match.team2 };
-        if (manualWinner === match.team2) return { winner: match.team2, loser: match.team1 };
-        return null;
-      }
-      return total1 > total2
-        ? { winner: match.team1, loser: match.team2 }
-        : { winner: match.team2, loser: match.team1 };
-    };
+    const winnerOf = resolveLibertadoresFinalResult;
     const finalResult = winnerOf(finalMatch);
     const thirdResult = winnerOf(thirdMatch);
     if (!finalResult || !thirdResult) return null;
