@@ -71,6 +71,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   const [manualDecisionError, setManualDecisionError] = useState<string | null>(null);
   const [savingManualDecision, setSavingManualDecision] = useState(false);
   const [simulatedManualWinner, setSimulatedManualWinner] = useState<string | null>(null);
+  const [simulationEnabled, setSimulationEnabled] = useState(false);
   const [manualGroupOrders, setManualGroupOrders] = useState<Record<string, string[]>>({});
   const [pendingGroupOrders, setPendingGroupOrders] = useState<Record<string, string[]>>({});
   const [manualGlobalOrder, setManualGlobalOrder] = useState<string[]>([]);
@@ -209,10 +210,10 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
   // Simulação local, somente em deploys Vercel e mediante parâmetro explícito na URL.
   // Não grava placares nem vencedores no Supabase.
-  const isLibertadoresTieSimulation =
-    typeof window !== 'undefined' &&
-    window.location.hostname.endsWith('.vercel.app') &&
-    new URLSearchParams(window.location.search).get('libertadoresTestTie') === '1';
+  const isVercelPreview = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+  const isLibertadoresTieSimulation = isVercelPreview && (
+    new URLSearchParams(window.location.search).get('libertadoresTestTie') === '1' || simulationEnabled
+  );
   const displayedKnockoutData = isLibertadoresTieSimulation && knockoutData?.matches?.length
     ? {
         ...knockoutData,
@@ -838,6 +839,20 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   return (
     <div className="space-y-4">
       {/* Phase selector */}
+      {isVercelPreview && (
+        <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">Teste de desempate (somente preview)</p>
+            <p className="text-xs text-muted-foreground">Cria um empate fictício nesta tela, sem salvar placares ou vencedores.</p>
+          </div>
+          <Button size="sm" variant={isLibertadoresTieSimulation ? 'secondary' : 'outline'} onClick={() => {
+            setSimulationEnabled(current => !current);
+            setSimulatedManualWinner(null);
+          }}>
+            {isLibertadoresTieSimulation ? 'Desativar simulação' : 'Simular empate'}
+          </Button>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <Trophy className="w-4 h-4 text-primary flex-shrink-0" />
         <Select value={fase} onValueChange={handleFaseChange}>
