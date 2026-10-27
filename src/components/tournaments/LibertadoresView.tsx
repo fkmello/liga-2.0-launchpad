@@ -211,9 +211,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   // Simulação local, somente em deploys Vercel e mediante parâmetro explícito na URL.
   // Não grava placares nem vencedores no Supabase.
   const isVercelPreview = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
-  const isLibertadoresTieSimulation = isVercelPreview && (
-    new URLSearchParams(window.location.search).get('libertadoresTestTie') === '1' || simulationEnabled
-  );
+  const isLibertadoresTieSimulation = isVercelPreview && simulationEnabled;
   const displayedKnockoutData = isLibertadoresTieSimulation && knockoutData?.matches?.length
     ? {
         ...knockoutData,
