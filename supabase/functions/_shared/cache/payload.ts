@@ -8,7 +8,7 @@ import { KnownProviders } from '../sync/providers.ts';
 
 export interface NormalizedTournamentData {
   fases: Record<string, unknown>;
-  classificacao: { grupos: Record<string, unknown[]> };
+  classificacao: { grupos: Record<string, unknown[]>; [key: string]: unknown };
   dados_externos: { rows: unknown[] };
 }
 
