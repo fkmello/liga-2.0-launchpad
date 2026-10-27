@@ -386,8 +386,10 @@ export function resolveLibertadoresProgression(
   let next = fases;
   if (allGroupMatchesComplete(next)) {
     const qualified = qualifiedGroupTeams(classification);
+    // A completed group stage with unresolved manual ties must block all dependent rounds.
+    if (!qualified) return next;
     const phase = next['Oitavas de Final'];
-    if (qualified && Array.isArray(phase?.matches) && phase.matches.length === 8) {
+    if (Array.isArray(phase?.matches) && phase.matches.length === 8) {
       const matches = phase.matches.map((match: ContinentalMatch, index: number) =>
         replaceMatchTeams(match, qualified[index].team, qualified[15 - index].team)
       );
