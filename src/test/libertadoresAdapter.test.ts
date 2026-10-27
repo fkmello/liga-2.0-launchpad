@@ -202,6 +202,32 @@ describe('Libertadores adapter', () => {
     expect(result['Quartas de Final'].matches[0].team2).toBe('Time A1');
   });
 
+  it('gera oitavas após aplicar ordens manuais para empates de grupo e da classificação geral', () => {
+    const grupos: Record<string, unknown[]> = {};
+    const groupMatches: any[] = [];
+    const groupOrders: Record<string, string[]> = {};
+    const globalOrder: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = `A${i}`, b = `B${i}`;
+      grupos[`Grupo ${i}`] = [
+        ['1', '', a, '10', '6', '3', '1', '2', '300,00', '10,00'],
+        ['2', '', b, '10', '6', '3', '1', '2', '300,00', '10,00'],
+      ];
+      groupOrders[`Grupo ${i}`] = [a, b];
+      globalOrder.push(a, b);
+      groupMatches.push({ name: `Grupo ${i}`, matches: [{ team1: a, team2: b, score1: '80,00', score2: '70,00' }] });
+    }
+    const fases: any = { 'Fase de Grupos': {}, 'Oitavas de Final': { matches: Array.from({ length: 8 }, () => ({ team1: '', team2: '' })) } };
+    for (let round = 1; round <= 6; round++) fases['Fase de Grupos'][`rodada_${round}`] = { groups: groupMatches };
+    const result = resolveLibertadoresProgression(fases, {
+      grupos,
+      desempatesManuais: { grupos: groupOrders, global: globalOrder },
+    } as any);
+    expect(result['Oitavas de Final'].matches.every((match: any) => match.team1 && match.team2)).toBe(true);
+    expect(result['Oitavas de Final'].matches[0].team1).toBe('A0');
+    expect(result['Oitavas de Final'].matches[0].team2).toBe('B7');
+  });
+
   it('não gera oitavas quando há empate completo nos critérios de classificação do grupo', () => {
     const grupos: Record<string, unknown[]> = {};
     const groupMatches: any[] = [];
