@@ -22,6 +22,7 @@ import { usePartialScores } from '@/hooks/usePartialScores';
 import { useUserTeamIds, buildIsUserTeamById } from '@/hooks/useUserTeamIds';
 import { useUserTeamNames } from '@/hooks/useUserTeamNames';
 import { resolveLibertadoresFinalResult } from '@/utils/libertadoresResults';
+import { isUnresolvedLibertadoresKnockoutTie } from '@/utils/libertadoresKnockoutTie';
 
 const FASES = [
   'Classificação',
@@ -255,25 +256,8 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     };
   }, [isFinal, knockoutData, badgeUrls]);
 
-  const parseKnockoutScore = (value: unknown): number | null => {
-    if (value === null || value === undefined || String(value).trim() === '') return null;
-    const parsed = Number(String(value).replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  const isUnresolvedKnockoutTie = (match: any, phaseName = fase) => {
-    if (!match?.team1 || !match?.team2 || match.manualWinner) return false;
-    const ida1 = parseKnockoutScore(match.scoreIda1);
-    const ida2 = parseKnockoutScore(match.scoreIda2);
-    if (ida1 === null || ida2 === null) return false;
-    const volta1 = parseKnockoutScore(match.scoreVolta1);
-    const volta2 = parseKnockoutScore(match.scoreVolta2);
-    const singleMatch = phaseName === 'Final' && (String(match.matchNumber ?? '').toUpperCase() === 'FINAL' ||
-      String(match.matchNumber ?? '').toUpperCase().includes('LUGAR'));
-    if (singleMatch && volta1 === null && volta2 === null) return ida1 === ida2;
-    if (volta1 === null || volta2 === null) return false;
-    return ida1 + volta1 === ida2 + volta2;
-  };
+  const isUnresolvedKnockoutTie = (match: any, phaseName = fase) =>
+    isUnresolvedLibertadoresKnockoutTie(match, phaseName);
 
   const saveManualWinner = async (phaseName: string, matchNumber: string, winner: string) => {
     if (!isAdmin || !winner || savingManualDecision) return;
