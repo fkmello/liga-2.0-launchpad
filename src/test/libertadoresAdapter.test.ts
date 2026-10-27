@@ -189,7 +189,7 @@ describe('Libertadores adapter', () => {
     const fases: any = {
       'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
         team1: `Time A${i}`, team2: `Time B${i}`,
-        scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '70,00', scoreVolta2: '80,00',
+        scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: i === 0 ? '70,00' : '75,00', scoreVolta2: '80,00',
         ...(i === 0 ? { manualWinner: `Time B${i}` } : {}),
       })) },
       'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
