@@ -17,7 +17,7 @@ export interface AdapterContext {
   /** Conteúdo atual do cache, injetado pelo pipeline (adapters não leem o banco). */
   previous?: {
     fases: Record<string, unknown>;
-    classificacao: { grupos: Record<string, unknown[]> };
+    classificacao: { grupos: Record<string, unknown[]>; [key: string]: unknown };
     dados_externos: { rows: unknown[] };
   } | null;
 }
@@ -28,7 +28,7 @@ export interface TournamentAdapter<Raw = unknown> {
   source_type: SourceType;
   fetchRaw(ctx: AdapterContext): Promise<Raw>;
   toFases?(raw: Raw, ctx: AdapterContext): Record<string, unknown>;
-  toClassificacao?(raw: Raw, ctx: AdapterContext): { grupos: Record<string, unknown[]> };
+  toClassificacao?(raw: Raw, ctx: AdapterContext): { grupos: Record<string, unknown[]>; [key: string]: unknown };
   toDadosExternos?(raw: Raw, ctx: AdapterContext): { rows: unknown[] };
   toMatches?(raw: Raw, ctx: AdapterContext): MatchInput[];
 }
