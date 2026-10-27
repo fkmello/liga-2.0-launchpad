@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recalculateLibertadoresClassification, resolveLibertadoresClassification, resolveLibertadoresFinalists, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
+import { recalculateLibertadoresClassification, resolveLibertadoresClassification, resolveLibertadoresFinalists, resolveLibertadoresProgression, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
 
@@ -142,5 +142,46 @@ describe('Libertadores adapter', () => {
     expect(payload?.fases.Semifinal).toEqual(legacy.fases.Semifinal);
     expect(payload?.classificacao.grupos['GRUPO A']).toEqual(legacy.classificacao.groups[0].rows);
     expect(payload?.dados_externos.rows).toEqual(legacy.dados_externos.rows);
+  });
+
+  it('preenche as oitavas em ordem global de classificação somente com grupos completos', () => {
+    const grupos: Record<string, unknown[]> = {};
+    const groupMatches: any[] = [];
+    for (let groupIndex = 0; groupIndex < 8; groupIndex++) {
+      const team1 = `Time ${String(groupIndex * 2 + 1).padStart(2, '0')}`;
+      const team2 = `Time ${String(groupIndex * 2 + 2).padStart(2, '0')}`;
+      grupos[`Grupo ${groupIndex + 1}`] = [
+        [ '1', '', team1, String(32 - groupIndex), '6', '6', '0', '0', '600,00', String(60 - groupIndex) ],
+        [ '2', '', team2, String(16 - groupIndex), '6', '4', '0', '2', '400,00', String(30 - groupIndex) ],
+      ];
+      groupMatches.push({ name: `Grupo ${groupIndex + 1}`, matches: [{ team1, team2, score1: '80,00', score2: '70,00' }] });
+    }
+    const fases: any = { 'Fase de Grupos': {}, 'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({ matchNumber: String(i + 1), team1: '', team2: '' })) } };
+    for (let round = 1; round <= 6; round++) fases['Fase de Grupos'][`rodada_${round}`] = { groups: groupMatches };
+    const result = resolveLibertadoresProgression(fases, { grupos });
+    expect(result['Oitavas de Final'].matches.map((m: any) => [m.team1, m.team2])).toEqual([
+      ['Time 01', 'Time 16'], ['Time 02', 'Time 15'], ['Time 03', 'Time 14'], ['Time 04', 'Time 13'],
+      ['Time 05', 'Time 12'], ['Time 06', 'Time 11'], ['Time 07', 'Time 10'], ['Time 08', 'Time 09'],
+    ]);
+    const incomplete = { ...fases, 'Fase de Grupos': { ...fases['Fase de Grupos'], rodada_6: { groups: [{ name: 'Grupo 1', matches: [{ team1: 'Time 01', team2: 'Time 02', score1: '', score2: '' }] }] } } };
+    expect(resolveLibertadoresProgression(incomplete, { grupos })['Oitavas de Final'].matches[0].team1).toBe('');
+  });
+
+  it('avança oitavas para quartas e quartas para semifinal apenas com vencedores definidos', () => {
+    const makeMatches = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => ({
+      team1: `${prefix}A${i}`, team2: `${prefix}B${i}`,
+      scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '75,00', scoreVolta2: '70,00',
+    }));
+    const fases: any = {
+      'Oitavas de Final': { matches: makeMatches('O', 8) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
+      Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: '', team2: '' })) },
+      Final: { matches: [{ matchNumber: 'FINAL', team1: '', team2: '' }, { matchNumber: '3º LUGAR', team1: '', team2: '' }] },
+    };
+    const result = resolveLibertadoresProgression(fases, { grupos: {} });
+    expect(result['Quartas de Final'].matches.map((m: any) => [m.team1, m.team2])).toEqual([
+      ['O A0', 'O A1'], ['O A2', 'O A3'], ['O A4', 'O A5'], ['O A6', 'O A7'],
+    ]);
+    expect(result.Semifinal.matches.every((m: any) => m.team1 && m.team2)).toBe(false);
   });
 });
