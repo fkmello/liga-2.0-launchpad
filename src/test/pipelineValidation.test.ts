@@ -3,6 +3,7 @@ import { resolveSemanticCompareStatus } from '../../supabase/functions/_shared/c
 import { buildCoverageReport } from '../../supabase/functions/_shared/sync/validation/coverage';
 import { diffLibertadoresClassification } from '../../supabase/functions/_shared/sync/validation/standingsDiff';
 import { normalizeTournamentData } from '../../supabase/functions/_shared/sync/pipeline/normalize';
+import { mergeTournamentPayload } from '../../supabase/functions/_shared/cache/payload';
 
 const oldRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '28,00'];
 const newRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '474,85', '28,00'];
@@ -24,6 +25,24 @@ describe('pipeline validation indicators', () => {
 
     expect(normalized.classificacao.grupos['GRUPO A']).toEqual([['1', '', 'Time A', '12']]);
     expect((normalized.classificacao as any).desempatesManuais).toEqual(manualDecisions);
+
+    const previous = {
+      version: 1,
+      synced_at: '2026-01-01T00:00:00.000Z',
+      fases: {},
+      classificacao: {
+        grupos: { 'GRUPO A': [['1', '', 'Time A', '12']] },
+        desempatesManuais: manualDecisions,
+      },
+      dados_externos: { rows: [] },
+    };
+    const next = {
+      ...previous,
+      classificacao: normalized.classificacao,
+    };
+    const merged = mergeTournamentPayload({ mergeableKeys: [] } as any, previous as any, next as any);
+
+    expect((merged.classificacao as any).desempatesManuais).toEqual(manualDecisions);
   });
   it('reports structural classification differences as WARNING, not MATCH', () => {
     expect(resolveSemanticCompareStatus(['classificacao'], false).status).toBe('WARNING');
