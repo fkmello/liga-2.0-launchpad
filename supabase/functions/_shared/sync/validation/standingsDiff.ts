@@ -160,11 +160,14 @@ export function diffLibertadoresClassification(
   }
 
   const divergences: StandingsDivergence[] = [];
+  const generatedNames = new Set<string>();
   for (const rows of Object.values(generatedClassification.grupos)) {
     for (const raw of Array.isArray(rows) ? rows as unknown[] : []) {
       const calculated = parseLibertadoresClassificationRow(raw);
       if (!calculated) continue;
-      const previous = base.get(normalizeName(calculated.name));
+      const normalizedName = normalizeName(calculated.name);
+      generatedNames.add(normalizedName);
+      const previous = base.get(normalizedName);
       if (!previous) {
         divergences.push({
           equipe: calculated.name,
@@ -198,5 +201,17 @@ export function diffLibertadoresClassification(
       }
     }
   }
+
+  for (const [normalizedName, previous] of base) {
+    if (!generatedNames.has(normalizedName)) {
+      divergences.push({
+        equipe: previous.name,
+        campo: 'presenca',
+        valor_atual: 'presente no cache',
+        valor_calculado: null,
+      });
+    }
+  }
+
   return divergences;
 }

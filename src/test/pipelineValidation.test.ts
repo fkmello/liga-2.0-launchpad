@@ -40,6 +40,17 @@ describe('pipeline validation indicators', () => {
     });
   });
 
+  it('detects a baseline team missing from the generated classification', () => {
+    const baseline = { classificacao: { grupos: { 'GRUPO A': [oldRow] } } };
+    const generated = { classificacao: { grupos: { 'GRUPO A': [] } } };
+    expect(diffLibertadoresClassification(baseline as any, generated.classificacao as any)).toContainEqual({
+      equipe: 'Time A',
+      campo: 'presenca',
+      valor_atual: 'presente no cache',
+      valor_calculado: null,
+    });
+  });
+
   it('counts Libertadores rows using its own column layout', () => {
     const baseline = {
       classificacao: { grupos: { 'GRUPO A': [oldRow] } },

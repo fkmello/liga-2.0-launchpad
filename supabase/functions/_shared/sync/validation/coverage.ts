@@ -79,8 +79,9 @@ function countLibertadoresClassificationRows(payload: TournamentCachePayload | n
     for (const row of rows as unknown[]) {
       if (!Array.isArray(row) || row.length < 9) continue;
       const team = String(row[2] ?? '').trim();
-      const points = Number(String(row[3] ?? '').replace(',', '.'));
-      if (team && Number.isFinite(points)) count++;
+      const pointsText = String(row[3] ?? '').trim();
+      const points = Number(pointsText.replace(',', '.'));
+      if (team && pointsText && Number.isFinite(points)) count++;
     }
   }
   return count;
