@@ -170,7 +170,7 @@ describe('Libertadores adapter', () => {
   it('avança oitavas para quartas e quartas para semifinal apenas com vencedores definidos', () => {
     const makeMatches = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => ({
       team1: `${prefix}A${i}`, team2: `${prefix}B${i}`,
-      scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '75,00', scoreVolta2: '70,00',
+      scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: i === 0 ? '70,00' : '75,00', scoreVolta2: '70,00',
     }));
     const fases: any = {
       'Oitavas de Final': { matches: makeMatches('O', 8) },
@@ -180,7 +180,7 @@ describe('Libertadores adapter', () => {
     };
     const result = resolveLibertadoresProgression(fases, { grupos: {} });
     expect(result['Quartas de Final'].matches.map((m: any) => [m.team1, m.team2])).toEqual([
-      ['O A0', 'O A1'], ['O A2', 'O A3'], ['O A4', 'O A5'], ['O A6', 'O A7'],
+      ['OA0', 'OA1'], ['OA2', 'OA3'], ['OA4', 'OA5'], ['OA6', 'OA7'],
     ]);
     expect(result.Semifinal.matches.every((m: any) => m.team1 && m.team2)).toBe(false);
   });
