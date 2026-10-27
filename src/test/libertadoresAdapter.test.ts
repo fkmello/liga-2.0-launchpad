@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { resolveLibertadoresFinalResult } from '../utils/libertadoresResults';
 import { recalculateLibertadoresClassification, resolveLibertadoresClassification, resolveLibertadoresFinalists, resolveLibertadoresProgression, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
@@ -215,5 +216,31 @@ describe('Libertadores adapter', () => {
     for (let round = 1; round <= 6; round++) fases['Fase de Grupos'][`rodada_${round}`] = { groups: groupMatches };
     const result = resolveLibertadoresProgression(fases, { grupos });
     expect(result['Oitavas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+  });
+});
+
+
+describe('Libertadores single-match final and third-place results', () => {
+  it('resolves the winner of a single-leg final without requiring a second leg', () => {
+    expect(resolveLibertadoresFinalResult({
+      team1: 'Riverao FC', team2: 'Red Label SFX',
+      scoreIda1: '101,76', scoreIda2: '84,96',
+    })).toEqual({ winner: 'Riverao FC', loser: 'Red Label SFX' });
+  });
+
+  it('waits for manual draw resolution when the single-match score is tied', () => {
+    expect(resolveLibertadoresFinalResult({
+      team1: 'Time A', team2: 'Time B', scoreIda1: '90,00', scoreIda2: '90,00',
+    })).toBeNull();
+    expect(resolveLibertadoresFinalResult({
+      team1: 'Time A', team2: 'Time B', scoreIda1: '90,00', scoreIda2: '90,00',
+      manualWinner: 'Time B',
+    })).toEqual({ winner: 'Time B', loser: 'Time A' });
+  });
+
+  it('does not resolve the podium while either final score is missing', () => {
+    expect(resolveLibertadoresFinalResult({
+      team1: 'Time A', team2: 'Time B', scoreIda1: '90,00', scoreIda2: '',
+    })).toBeNull();
   });
 });
