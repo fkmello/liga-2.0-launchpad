@@ -253,10 +253,17 @@ describe('Libertadores adapter', () => {
       ];
       groupMatches.push({ name: `Grupo ${i}`, matches: [{ team1: a, team2: b, score1: '80,00', score2: '70,00' }] });
     }
-    const fases: any = { 'Fase de Grupos': {}, 'Oitavas de Final': { matches: Array.from({ length: 8 }, () => ({ team1: '', team2: '' })) } };
+    const fases: any = {
+      'Fase de Grupos': {},
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, () => ({
+        team1: '', team2: '', scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '70,00', scoreVolta2: '80,00',
+      })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
+    };
     for (let round = 1; round <= 6; round++) fases['Fase de Grupos'][`rodada_${round}`] = { groups: groupMatches };
     const result = resolveLibertadoresProgression(fases, { grupos });
     expect(result['Oitavas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+    expect(result['Quartas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
   });
 });
 
