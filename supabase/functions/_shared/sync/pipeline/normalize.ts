@@ -44,3 +44,17 @@ export function normalizeTournamentData(
 
   return result;
 }
+
+
+/**
+ * Aplica a classificação calculada sem descartar metadados da classificação
+ * normalizada, como desempates manuais persistidos no cache shadow.
+ */
+export function mergeCalculatedStandings(
+  classification: NormalizedTournamentData['classificacao'],
+  groups: Record<string, unknown[]>,
+): NormalizedTournamentData['classificacao'] {
+  return Object.keys(groups).length
+    ? { ...classification, grupos: groups }
+    : classification;
+}
