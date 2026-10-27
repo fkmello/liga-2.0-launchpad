@@ -167,13 +167,11 @@ export async function runPipeline(
     semantic: def.league === 'libertadores' || (def.league === 'copa_brasil' && opts.compare === true),
   });
   const fields = Object.keys(comparison.diff);
-  const status = resolveCompareStatus(fields);
 
   base.payload = payload;
   base.changed = comparison.changed;
   base.diff = comparison.diff;
   base.identical = !comparison.changed;
-  base.compare_status = status.status;
   base.differences_count = fields.length;
   base.fields_differing = fields;
   base.hash_atual = current?.metadata?.hash ?? '';
