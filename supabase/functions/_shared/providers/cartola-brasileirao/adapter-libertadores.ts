@@ -259,6 +259,156 @@ export function resolveLibertadoresClassification(
   return recalculateLibertadoresClassification(fases, previousClassification);
 }
 
+
+type StandingRow = { team: string; points: number; wins: number; goalDiff: number; goalsFor: number; group: string };
+
+function standingValue(row: unknown[], index: number): number {
+  const value = row[index];
+  const parsed = Number(String(value ?? '0').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function compareStanding(a: StandingRow, b: StandingRow): number {
+  return b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor;
+}
+
+function allGroupMatchesComplete(fases: ContinentalFases): boolean {
+  const stage = fases?.['Fase de Grupos'];
+  if (!stage) return false;
+  for (let round = 1; round <= 6; round++) {
+    const groups = stage[`rodada_${round}`]?.groups;
+    if (!Array.isArray(groups) || groups.length === 0) return false;
+    for (const group of groups) {
+      if (!Array.isArray(group?.matches) || group.matches.length === 0) return false;
+      if (group.matches.some((match: any) =>
+        parseFantasyScore(match?.score1) === null || parseFantasyScore(match?.score2) === null
+      )) return false;
+    }
+  }
+  return true;
+}
+
+function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]> }): StandingRow[] | null {
+  const qualified: StandingRow[] = [];
+  for (const [group, rows] of Object.entries(classification?.grupos ?? {})) {
+    const sorted = [...(rows as unknown[][])].sort((a, b) =>
+      standingValue(b, 3) - standingValue(a, 3) ||
+      standingValue(b, 5) - standingValue(a, 5) ||
+      standingValue(b, 9) - standingValue(a, 9) ||
+      standingValue(b, 8) - standingValue(a, 8)
+    );
+    if (sorted.length < 2) return null;
+    for (let i = 0; i < Math.min(2, sorted.length); i++) {
+      const row = sorted[i];
+      qualified.push({
+        team: String(row[2] ?? '').trim(),
+        points: standingValue(row, 3),
+        wins: standingValue(row, 5),
+        goalDiff: standingValue(row, 9),
+        goalsFor: standingValue(row, 8),
+        group,
+      });
+    }
+  }
+  if (qualified.length !== 16 || qualified.some(row => !row.team)) return null;
+  qualified.sort(compareStanding);
+  // A complete tie on all four criteria needs a human draw; never break it by team name.
+  for (let i = 1; i < qualified.length; i++) {
+    if (compareStanding(qualified[i - 1], qualified[i]) === 0) return null;
+  }
+  return qualified;
+}
+
+function resolveTwoLeggedMatch(match: ContinentalMatch): { winner: string; loser: string } | null {
+  if (!match?.team1 || !match?.team2) return null;
+  const ida1 = parseKnockoutScore(match.scoreIda1);
+  const ida2 = parseKnockoutScore(match.scoreIda2);
+  const volta1 = parseKnockoutScore(match.scoreVolta1);
+  const volta2 = parseKnockoutScore(match.scoreVolta2);
+  if (ida1 === null || ida2 === null || volta1 === null || volta2 === null) return null;
+  // A manually selected winner is kept in the match object, independently of API scores.
+  if (match.manualWinner === match.team1) return { winner: String(match.team1), loser: String(match.team2) };
+  if (match.manualWinner === match.team2) return { winner: String(match.team2), loser: String(match.team1) };
+  const total1 = ida1 + volta1;
+  const total2 = ida2 + volta2;
+  if (total1 === total2) return null;
+  return total1 > total2
+    ? { winner: String(match.team1), loser: String(match.team2) }
+    : { winner: String(match.team2), loser: String(match.team1) };
+}
+
+function replaceMatchTeams(match: ContinentalMatch, team1: string, team2: string): ContinentalMatch {
+  if (match.team1 === team1 && match.team2 === team2) return match;
+  // Do not carry scores from a different pairing into newly generated fixtures.
+  const next = { ...match, team1, team2 };
+  for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) {
+    next[field] = '';
+  }
+  delete next.manualWinner;
+  return next;
+}
+
+/**
+ * Progresses the Libertadores bracket without inventing results. Manual draw decisions
+ * live on each match as manualWinner, separate from API score fields.
+ */
+export function resolveLibertadoresProgression(
+  fases: ContinentalFases,
+  classification: { grupos: Record<string, unknown[]> },
+): ContinentalFases {
+  let next = fases;
+  if (allGroupMatchesComplete(next)) {
+    const qualified = qualifiedGroupTeams(classification);
+    const phase = next['Oitavas de Final'];
+    if (qualified && Array.isArray(phase?.matches) && phase.matches.length === 8) {
+      const matches = phase.matches.map((match: ContinentalMatch, index: number) =>
+        replaceMatchTeams(match, qualified[index].team, qualified[15 - index].team)
+      );
+      next = { ...next, 'Oitavas de Final': { ...phase, matches } };
+    }
+  }
+
+  const phases = [
+    { source: 'Oitavas de Final', target: 'Quartas de Final' },
+    { source: 'Quartas de Final', target: 'Semifinal' },
+  ];
+  for (const { source, target } of phases) {
+    const sourceMatches = next?.[source]?.matches;
+    const targetPhase = next?.[target];
+    if (!Array.isArray(sourceMatches) || !Array.isArray(targetPhase?.matches) ||
+        sourceMatches.length !== 8 && source !== 'Oitavas de Final') continue;
+    const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
+    if (winners.some((winner: any) => !winner)) continue;
+    const pairs = [];
+    for (let i = 0; i < winners.length; i += 2) {
+      pairs.push([winners[i].winner, winners[i + 1].winner]);
+    }
+    const matches = targetPhase.matches.map((match: ContinentalMatch, index: number) =>
+      pairs[index] ? replaceMatchTeams(match, pairs[index][0], pairs[index][1]) : match
+    );
+    next = { ...next, [target]: { ...targetPhase, matches } };
+  }
+
+  const semifinal = next?.Semifinal?.matches;
+  const final = next?.Final;
+  if (Array.isArray(semifinal) && Array.isArray(final?.matches)) {
+    const qualifiers = semifinal.map((match: ContinentalMatch) => {
+      const result = resolveTwoLeggedMatch(match);
+      return result ? { winner: result.winner, loser: result.loser } : null;
+    });
+    if (qualifiers.length >= 2 && qualifiers[0] && qualifiers[1]) {
+      const matches = final.matches.map((match: ContinentalMatch) => {
+        const label = String(match.matchNumber ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase();
+        if (label === 'FINAL') return replaceMatchTeams(match, qualifiers[0]!.winner, qualifiers[1]!.winner);
+        if (label.includes('3') && label.includes('LUGAR')) return replaceMatchTeams(match, qualifiers[0]!.loser, qualifiers[1]!.loser);
+        return match;
+      });
+      next = { ...next, Final: { ...final, matches } };
+    }
+  }
+  return next;
+}
+
 export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
   id: 'cartola_brasileirao_libertadores_v1',
   provider: KnownProviders.CARTOLA_BRASILEIRAO,
@@ -295,11 +445,11 @@ export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
     );
     // Reavalia os classificados sempre que houver placares completos das duas semifinais.
     // A função não altera a fase Final enquanto os agregados não puderem ser determinados.
-    const fasesWithFinalists = resolveLibertadoresFinalists(updatedFases);
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
-    const updatedClassification = resolveLibertadoresClassification(fasesWithFinalists, targetRound, previousClassification);
+    const updatedClassification = resolveLibertadoresClassification(updatedFases, targetRound, previousClassification);
+    const progressedFases = resolveLibertadoresProgression(updatedFases, updatedClassification);
 
-    return { fases: fasesWithFinalists, classificacao: updatedClassification, teams };
+    return { fases: progressedFases, classificacao: updatedClassification, teams };
   },
   toFases(raw) { return raw.fases; },
   toClassificacao(raw) { return raw.classificacao; },
