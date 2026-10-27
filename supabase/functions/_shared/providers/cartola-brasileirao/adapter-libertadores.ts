@@ -298,6 +298,14 @@ function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>
       standingValue(b, 8) - standingValue(a, 8)
     );
     if (sorted.length < 2) return null;
+    // Any complete tie in a group needs a manual draw before ranking can be trusted.
+    for (let i = 1; i < sorted.length; i++) {
+      const tied = standingValue(sorted[i - 1], 3) === standingValue(sorted[i], 3) &&
+        standingValue(sorted[i - 1], 5) === standingValue(sorted[i], 5) &&
+        standingValue(sorted[i - 1], 9) === standingValue(sorted[i], 9) &&
+        standingValue(sorted[i - 1], 8) === standingValue(sorted[i], 8);
+      if (tied) return null;
+    }
     for (let i = 0; i < Math.min(2, sorted.length); i++) {
       const row = sorted[i];
       qualified.push({
