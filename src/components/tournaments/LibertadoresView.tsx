@@ -58,7 +58,7 @@ interface LibertadoresViewProps {
   initialRodadaGrupos?: number;
 }
 
-const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
+const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
   const navigate = useNavigate();
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
