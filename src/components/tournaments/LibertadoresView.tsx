@@ -70,6 +70,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   const { isAdmin } = useAuth();
   const [manualDecisionError, setManualDecisionError] = useState<string | null>(null);
   const [savingManualDecision, setSavingManualDecision] = useState(false);
+  const [simulatedManualWinner, setSimulatedManualWinner] = useState<string | null>(null);
   const [manualGroupOrders, setManualGroupOrders] = useState<Record<string, string[]>>({});
   const [pendingGroupOrders, setPendingGroupOrders] = useState<Record<string, string[]>>({});
   const [manualGlobalOrder, setManualGlobalOrder] = useState<string[]>([]);
@@ -205,6 +206,31 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
   // Knockout data — only fetch when a knockout phase is selected
   const { data: knockoutData, isLoading: knockoutLoading, error: knockoutError } = useConfrontosLibertadores(isKnockout ? fase : 'Oitavas de Final');
+
+  // Simulação local, somente em deploys Vercel e mediante parâmetro explícito na URL.
+  // Não grava placares nem vencedores no Supabase.
+  const isLibertadoresTieSimulation =
+    typeof window !== 'undefined' &&
+    window.location.hostname.endsWith('.vercel.app') &&
+    new URLSearchParams(window.location.search).get('libertadoresTestTie') === '1';
+  const displayedKnockoutData = isLibertadoresTieSimulation && knockoutData?.matches?.length
+    ? {
+        ...knockoutData,
+        matches: knockoutData.matches.map((match, index) => {
+          if (index !== 0) return match;
+          const number = String(match.matchNumber ?? '').toUpperCase();
+          const isOneOffFinal = fase === 'Final' && (number === 'FINAL' || number.includes('LUGAR'));
+          return {
+            ...match,
+            scoreIda1: '1',
+            scoreIda2: isOneOffFinal ? '1' : '0',
+            scoreVolta1: isOneOffFinal ? '' : '0',
+            scoreVolta2: isOneOffFinal ? '' : '1',
+            manualWinner: simulatedManualWinner,
+          };
+        }),
+      }
+    : knockoutData;
 
   // Group matches data (RDD #01-06)
   const { data: groupMatchesData, isLoading: groupMatchesLoading, error: groupMatchesError } = useConfrontosLibertadoresGrupos(rodadaGrupos);
@@ -723,20 +749,28 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       );
     }
 
-    if (!knockoutData?.matches) {
+    if (!displayedKnockoutData?.matches) {
       return <p className="text-center text-sm text-muted-foreground py-8">Nenhum confronto encontrado.</p>;
     }
 
     return (
       <div className="space-y-2">
-        {knockoutData.rodadaInfo && (
+        {isLibertadoresTieSimulation && (
+          <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-1">
+            <p className="text-sm font-semibold">Modo de simulação de desempate</p>
+            <p className="text-xs text-muted-foreground">O primeiro confronto está temporariamente empatado apenas nesta tela. Nenhum placar foi alterado no banco de dados.</p>
+            {simulatedManualWinner && <p className="text-xs font-medium">Escolha simulada: {simulatedManualWinner}. Nada foi salvo.</p>}
+            <Button size="sm" variant="outline" onClick={() => setSimulatedManualWinner(null)}>Reiniciar simulação</Button>
+          </div>
+        )}
+        {displayedKnockoutData.rodadaInfo && (
           <div className="text-center mb-2">
-            <p className="text-xs text-muted-foreground">{knockoutData.rodadaInfo}</p>
+            <p className="text-xs text-muted-foreground">{displayedKnockoutData.rodadaInfo}</p>
           </div>
         )}
 
-        {knockoutData.matches.length > 0 ? (
-          knockoutData.matches.map((match, idx) => {
+        {displayedKnockoutData.matches.length > 0 ? (
+          displayedKnockoutData.matches.map((match, idx) => {
             const id1 = teamNameToId.get(match.team1?.toUpperCase());
             const id2 = teamNameToId.get(match.team2?.toUpperCase());
             const hasIds = !!id1 && !!id2;
@@ -759,19 +793,19 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           </p>
         )}
 
-        {isKnockout && knockoutData.matches.some((match: any) => isUnresolvedKnockoutTie(match, fase)) && (
+        {isKnockout && displayedKnockoutData.matches.some((match: any) => isUnresolvedKnockoutTie(match, fase)) && (
           <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="text-sm font-semibold text-amber-200">Desempate manual necessário</p>
             <p className="text-xs text-muted-foreground">Há confronto empatado no agregado. Selecione o vencedor do sorteio; a escolha ficará salva no cache da Libertadores e será preservada pela sincronização.</p>
-            {knockoutData.matches.filter((match: any) => isUnresolvedKnockoutTie(match, fase)).map((match: any) => (
+            {displayedKnockoutData.matches.filter((match: any) => isUnresolvedKnockoutTie(match, fase)).map((match: any) => (
               <div key={String(match.matchNumber)} className="space-y-2 rounded-md border border-border p-3">
                 <p className="text-xs font-semibold">{String(match.matchNumber ?? 'Confronto')} — {match.team1} x {match.team2}</p>
                 {isAdmin ? (
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
+                    <Button size="sm" variant="outline" disabled={!isLibertadoresTieSimulation && savingManualDecision} onClick={() => isLibertadoresTieSimulation ? setSimulatedManualWinner(String(match.team1)) : saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
                       Vencedor: {match.team1}
                     </Button>
-                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
+                    <Button size="sm" variant="outline" disabled={!isLibertadoresTieSimulation && savingManualDecision} onClick={() => isLibertadoresTieSimulation ? setSimulatedManualWinner(String(match.team2)) : saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
                       Vencedor: {match.team2}
                     </Button>
                   </div>
