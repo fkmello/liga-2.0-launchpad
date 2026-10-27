@@ -184,4 +184,36 @@ describe('Libertadores adapter', () => {
     ]);
     expect(result.Semifinal.matches.every((m: any) => m.team1 && m.team2)).toBe(false);
   });
+
+  it('respeita vencedor manual persistido no confronto quando o agregado empata', () => {
+    const fases: any = {
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
+        team1: `Time A${i}`, team2: `Time B${i}`,
+        scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '70,00', scoreVolta2: '80,00',
+        ...(i === 0 ? { manualWinner: `Time B${i}` } : {}),
+      })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
+      Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: '', team2: '' })) },
+    };
+    const result = resolveLibertadoresProgression(fases, { grupos: {} });
+    expect(result['Quartas de Final'].matches[0].team1).toBe('Time B0');
+    expect(result['Quartas de Final'].matches[0].team2).toBe('Time B1');
+  });
+
+  it('não gera oitavas quando há empate completo nos critérios de classificação do grupo', () => {
+    const grupos: Record<string, unknown[]> = {};
+    const groupMatches: any[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = `A${i}`, b = `B${i}`;
+      grupos[`Grupo ${i}`] = [
+        ['1', '', a, '10', '6', '3', '1', '2', '300,00', '10,00'],
+        ['2', '', b, '10', '6', '3', '1', '2', '300,00', '10,00'],
+      ];
+      groupMatches.push({ name: `Grupo ${i}`, matches: [{ team1: a, team2: b, score1: '80,00', score2: '70,00' }] });
+    }
+    const fases: any = { 'Fase de Grupos': {}, 'Oitavas de Final': { matches: Array.from({ length: 8 }, () => ({ team1: '', team2: '' })) } };
+    for (let round = 1; round <= 6; round++) fases['Fase de Grupos'][`rodada_${round}`] = { groups: groupMatches };
+    const result = resolveLibertadoresProgression(fases, { grupos });
+    expect(result['Oitavas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+  });
 });
