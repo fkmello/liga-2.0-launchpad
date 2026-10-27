@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recalculateLibertadoresClassification, resolveLibertadoresClassification, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
+import { recalculateLibertadoresClassification, resolveLibertadoresClassification, resolveLibertadoresFinalists, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
 
@@ -28,6 +28,39 @@ describe('Libertadores adapter', () => {
       const result = updateLibertadoresFases(fases, round, new Map([['101',71.25],['102',62.5]]), idByName);
       expect(result[phase].matches[0][key1]).toBe('71,25'); expect(result[phase].matches[0][key2]).toBe('62,50');
     }
+  });
+
+  it('preenche final e terceiro lugar com os vencedores e perdedores pelo agregado da ida e volta', () => {
+    const fases = {
+      Semifinal: { matches: [
+        { team1: 'Riverao FC', team2: 'Tatu Frito', scoreIda1: '97,19', scoreIda2: '83,49', scoreVolta1: '86,56', scoreVolta2: '93,31' },
+        { team1: 'Red Label SFX', team2: 'DOMINANTE E.C 2024', scoreIda1: '84,96', scoreIda2: '90,24', scoreVolta1: '101,76', scoreVolta2: '72,16' },
+      ] },
+      Final: { fase: 'Final', isFinal: true, matches: [
+        { team1: '', team2: '', matchNumber: 'FINAL', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+        { team1: '', team2: '', matchNumber: '3º LUGAR', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+      ] },
+    };
+    const result = resolveLibertadoresFinalists(fases);
+    expect(result.Final.matches[0].team1).toBe('Riverao FC');
+    expect(result.Final.matches[0].team2).toBe('Red Label SFX');
+    expect(result.Final.matches[1].team1).toBe('Tatu Frito');
+    expect(result.Final.matches[1].team2).toBe('DOMINANTE E.C 2024');
+    // Não altera os placares da final/terceiro lugar, que ainda não foram disputados.
+    expect(result.Final.matches[0].scoreIda1).toBe('');
+  });
+
+  it('não define classificados se faltar placar de semifinal ou houver empate no agregado', () => {
+    const fases = {
+      Semifinal: { matches: [
+        { team1: 'Time A', team2: 'Time B', scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '70,00', scoreVolta2: '80,00' },
+        { team1: 'Time C', team2: 'Time D', scoreIda1: '90,00', scoreIda2: '80,00', scoreVolta1: '', scoreVolta2: '' },
+      ] },
+      Final: { matches: [{ team1: '', team2: '', matchNumber: 'FINAL' }, { team1: '', team2: '', matchNumber: '3º LUGAR' }] },
+    };
+    const result = resolveLibertadoresFinalists(fases);
+    expect(result.Final.matches[0].team1).toBe('');
+    expect(result.Final.matches[1].team2).toBe('');
   });
   it('preserva placares quando a API não retorna pontuação', () => {
     const fases = { Semifinal: { matches: [{ team1:'Time A', team2:'Time B', scoreIda1:'70,00', scoreIda2:'60,00' }] } };
