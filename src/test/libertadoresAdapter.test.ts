@@ -46,6 +46,23 @@ describe('Libertadores adapter', () => {
     }
   });
 
+  it('trata a rodada 37 como jogo único e disponibiliza o placar para definir o campeão', () => {
+    const fases = {
+      Final: { matches: [{
+        matchNumber: 'FINAL', team1: 'Time A', team2: 'Time B',
+        scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '',
+      }] },
+    };
+    const updated = updateLibertadoresFases(
+      fases, 37, new Map([['101', 101.76], ['102', 84.96]]), idByName,
+    );
+    const match = updated.Final.matches[0];
+    expect(match.scoreIda1).toBe('101,76');
+    expect(match.scoreIda2).toBe('84,96');
+    expect(match.scoreVolta1).toBe('');
+    expect(resolveLibertadoresFinalResult(match)).toEqual({ winner: 'Time A', loser: 'Time B' });
+  });
+
   it('preenche final e terceiro lugar com os vencedores e perdedores pelo agregado da ida e volta', () => {
     const fases = {
       Semifinal: { matches: [
