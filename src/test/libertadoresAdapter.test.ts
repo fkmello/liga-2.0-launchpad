@@ -8,6 +8,20 @@ import { mergeLibertadoresFasesPreservingScores } from '../../supabase/functions
 const idByName = new Map([['timea', '101'], ['timeb', '102']]);
 
 describe('Libertadores adapter', () => {
+  it('preserva decisões manuais ao recalcular a classificação dos grupos', () => {
+    const decisions = { grupos: { 'GRUPO A': ['Time A', 'Time B'] }, global: ['Time A', 'Time B'] };
+    const fases: any = {
+      'Fase de Grupos': {
+        rodada_1: { groups: [{ name: 'GRUPO A', matches: [{ team1: 'Time A', team2: 'Time B', score1: '80,00', score2: '70,00' }] }] },
+      },
+    };
+    const result = resolveLibertadoresClassification(fases, 11, {
+      grupos: {},
+      desempatesManuais: decisions,
+    } as any) as any;
+    expect(result.desempatesManuais).toEqual(decisions);
+  });
+
   it('mapeia as seis rodadas de grupos para as rodadas Cartola existentes no frontend', () => {
     for (const [cartolaRound, groupRound] of [[11,1],[12,2],[14,3],[15,4],[17,5],[18,6]] as const) {
       const fases = { 'Fase de Grupos': { [`rodada_${groupRound}`]: {
