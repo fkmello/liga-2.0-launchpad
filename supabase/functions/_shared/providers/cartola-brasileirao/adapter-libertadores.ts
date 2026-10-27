@@ -256,7 +256,8 @@ export function resolveLibertadoresClassification(
   previousClassification: { grupos: Record<string, unknown[]> },
 ): { grupos: Record<string, unknown[]> } {
   if (!shouldRecalculateLibertadoresClassification(targetRound)) return previousClassification;
-  return recalculateLibertadoresClassification(fases, previousClassification);
+  const recalculated = recalculateLibertadoresClassification(fases, previousClassification);
+  return { ...recalculated, desempatesManuais: (previousClassification as any)?.desempatesManuais };
 }
 
 
@@ -288,23 +289,31 @@ function allGroupMatchesComplete(fases: ContinentalFases): boolean {
   return true;
 }
 
-function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]> }): StandingRow[] | null {
+function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>; desempatesManuais?: { grupos?: Record<string, string[]>; global?: string[] } }): StandingRow[] | null {
   const qualified: StandingRow[] = [];
   for (const [group, rows] of Object.entries(classification?.grupos ?? {})) {
-    const sorted = [...(rows as unknown[][])].sort((a, b) =>
+    const manualOrder = classification.desempatesManuais?.grupos?.[group] ?? [];
+    const manualRank = new Map(manualOrder.map((team, index) => [team, index]));
+    const compareRows = (a: unknown[], b: unknown[]) =>
       standingValue(b, 3) - standingValue(a, 3) ||
       standingValue(b, 5) - standingValue(a, 5) ||
       standingValue(b, 9) - standingValue(a, 9) ||
-      standingValue(b, 8) - standingValue(a, 8)
-    );
+      standingValue(b, 8) - standingValue(a, 8);
+    const sorted = [...(rows as unknown[][])].sort((a, b) => {
+      const criteria = compareRows(a, b);
+      if (criteria !== 0) return criteria;
+      const rankA = manualRank.get(String(a[2] ?? '').trim());
+      const rankB = manualRank.get(String(b[2] ?? '').trim());
+      return rankA === undefined || rankB === undefined ? 0 : rankA - rankB;
+    });
     if (sorted.length < 2) return null;
     // Any complete tie in a group needs a manual draw before ranking can be trusted.
     for (let i = 1; i < sorted.length; i++) {
-      const tied = standingValue(sorted[i - 1], 3) === standingValue(sorted[i], 3) &&
-        standingValue(sorted[i - 1], 5) === standingValue(sorted[i], 5) &&
-        standingValue(sorted[i - 1], 9) === standingValue(sorted[i], 9) &&
-        standingValue(sorted[i - 1], 8) === standingValue(sorted[i], 8);
-      if (tied) return null;
+      const tied = compareRows(sorted[i - 1], sorted[i]) === 0;
+      const previousTeam = String(sorted[i - 1][2] ?? '').trim();
+      const currentTeam = String(sorted[i][2] ?? '').trim();
+      if (tied && (!manualRank.has(previousTeam) || !manualRank.has(currentTeam) ||
+          manualRank.get(previousTeam) === manualRank.get(currentTeam))) return null;
     }
     for (let i = 0; i < Math.min(2, sorted.length); i++) {
       const row = sorted[i];
@@ -319,10 +328,20 @@ function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>
     }
   }
   if (qualified.length !== 16 || qualified.some(row => !row.team)) return null;
-  qualified.sort(compareStanding);
-  // A complete tie on all four criteria needs a human draw; never break it by team name.
+  const globalOrder = classification.desempatesManuais?.global ?? [];
+  const globalRank = new Map(globalOrder.map((team, index) => [team, index]));
+  qualified.sort((a, b) => {
+    const criteria = compareStanding(a, b);
+    if (criteria !== 0) return criteria;
+    const rankA = globalRank.get(a.team);
+    const rankB = globalRank.get(b.team);
+    return rankA === undefined || rankB === undefined ? 0 : rankA - rankB;
+  });
+  // A complete tie between qualified teams needs an explicit global draw decision.
   for (let i = 1; i < qualified.length; i++) {
-    if (compareStanding(qualified[i - 1], qualified[i]) === 0) return null;
+    if (compareStanding(qualified[i - 1], qualified[i]) === 0 &&
+        (!globalRank.has(qualified[i - 1].team) || !globalRank.has(qualified[i].team) ||
+         globalRank.get(qualified[i - 1].team) === globalRank.get(qualified[i].team))) return null;
   }
   return qualified;
 }
@@ -362,7 +381,7 @@ function replaceMatchTeams(match: ContinentalMatch, team1: string, team2: string
  */
 export function resolveLibertadoresProgression(
   fases: ContinentalFases,
-  classification: { grupos: Record<string, unknown[]> },
+  classification: { grupos: Record<string, unknown[]>; desempatesManuais?: { grupos?: Record<string, string[]>; global?: string[] } },
 ): ContinentalFases {
   let next = fases;
   if (allGroupMatchesComplete(next)) {
