@@ -23,6 +23,7 @@ import { useUserTeamIds, buildIsUserTeamById } from '@/hooks/useUserTeamIds';
 import { useUserTeamNames } from '@/hooks/useUserTeamNames';
 import { resolveLibertadoresFinalResult } from '@/utils/libertadoresResults';
 import { isUnresolvedLibertadoresKnockoutTie } from '@/utils/libertadoresKnockoutTie';
+import { applyManualLibertadoresWinner } from '@/utils/applyManualLibertadoresWinner';
 
 const FASES = [
   'Classificação',
@@ -297,14 +298,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
         .maybeSingle();
       if (readError) throw readError;
       if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
-      const payload = row.data as any;
-      const matches = payload?.fases?.[phaseName]?.matches;
-      if (!Array.isArray(matches)) throw new Error(`A fase ${phaseName} não foi encontrada no cache.`);
-      const target = matches.find((item: any) => String(item?.matchNumber ?? '').trim().toUpperCase() === matchNumber.toUpperCase());
-      if (!target || ![target.team1, target.team2].includes(winner) || !isUnresolvedKnockoutTie(target, phaseName)) {
-        throw new Error('O confronto mudou ou não está mais empatado. Atualize a tela e tente novamente.');
-      }
-      target.manualWinner = winner;
+      const payload = applyManualLibertadoresWinner(row.data as any, phaseName, matchNumber, winner);
       const { error: saveError } = await supabase
         .from('sheets_cache')
         .update({ data: payload })
