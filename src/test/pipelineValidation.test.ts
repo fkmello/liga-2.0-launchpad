@@ -5,6 +5,8 @@ import { diffLibertadoresClassification } from '../../supabase/functions/_shared
 import { mergeCalculatedStandings, normalizeTournamentData } from '../../supabase/functions/_shared/sync/pipeline/normalize';
 import { mergeTournamentPayload } from '../../supabase/functions/_shared/cache/payload';
 import { createShadowRepository } from '../../supabase/functions/_shared/cache/shadowRepository';
+import { mergeLibertadoresFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
+import { resolveLibertadoresProgression, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 
 const oldRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '28,00'];
 const newRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '474,85', '28,00'];
@@ -114,6 +116,87 @@ describe('pipeline validation indicators', () => {
     expect(rows.get('shadow/libertadores/2026').type).toBe('shadow_libertadores');
     expect(rows.get('shadow/libertadores/2026').data.classificacao.desempatesManuais).toEqual(manualDecisions);
     expect((await repo.load('libertadores'))?.classificacao.desempatesManuais).toEqual(manualDecisions);
+  });
+
+  it('keeps a manual knockout winner through a simulated API sync and shadow-cache reload', async () => {
+    const rows = new Map<string, any>();
+    const supabaseAdmin = {
+      from(table: string) {
+        if (table !== 'sheets_cache') throw new Error(`Unexpected table: ${table}`);
+        let selectedKey = '';
+        return {
+          select() { return this; },
+          eq(column: string, value: string) {
+            if (column !== 'cache_key') throw new Error(`Unexpected column: ${column}`);
+            selectedKey = value;
+            return this;
+          },
+          async maybeSingle() {
+            const row = rows.get(selectedKey);
+            return { data: row ? { data: row.data } : null, error: null };
+          },
+          async upsert(row: any) {
+            rows.set(row.cache_key, row);
+            return { error: null };
+          },
+        };
+      },
+    };
+    const phases: any = {
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
+        matchNumber: String(i + 1),
+        team1: `Time A${i}`,
+        team2: `Time B${i}`,
+        scoreIda1: i === 0 ? '80,00' : '90,00',
+        scoreIda2: i === 0 ? '80,00' : '70,00',
+        scoreVolta1: i === 0 ? '70,00' : '90,00',
+        scoreVolta2: i === 0 ? '70,00' : '70,00',
+        ...(i === 0 ? { manualWinner: 'Time B0' } : {}),
+      })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({ matchNumber: String(i + 1), team1: '', team2: '' })) },
+      Semifinal: { matches: Array.from({ length: 2 }, (_, i) => ({ matchNumber: String(i + 1), team1: '', team2: '' })) },
+      Final: { matches: [{ matchNumber: 'FINAL', team1: '', team2: '' }, { matchNumber: '3º LUGAR', team1: '', team2: '' }] },
+    };
+    const repo = createShadowRepository({
+      supabaseAdmin,
+      league: 'libertadores',
+      season: 2026,
+      legacyReader: async () => null,
+    });
+    const initial = {
+      version: 1,
+      synced_at: '2026-10-27T21:00:00.000Z',
+      fases: phases,
+      classificacao: { grupos: { 'GRUPO A': [['1', '', 'Time A0', '12']] }, desempatesManuais: { grupos: {}, global: [] } },
+      dados_externos: { rows: [['Time A0', '1', '']] },
+      metadata: { hash: 'before-sync' },
+    } as any;
+    await repo.save('libertadores', initial, { type: 'libertadores', syncedBy: null });
+
+    // Simula a próxima sincronização da API: ela não envia manualWinner.
+    const loaded = await repo.load('libertadores');
+    expect(loaded?.fases['Oitavas de Final'].matches[0].manualWinner).toBe('Time B0');
+    const apiFases = updateLibertadoresFases(
+      loaded!.fases as any,
+      24,
+      new Map<string, number | null>(),
+      new Map<string, string>(),
+    );
+    const progressed = resolveLibertadoresProgression(apiFases, loaded!.classificacao as any);
+    const mergedFases = mergeLibertadoresFasesPreservingScores(loaded!.fases, progressed);
+
+    await repo.save('libertadores', {
+      ...loaded!,
+      synced_at: '2026-10-27T21:01:00.000Z',
+      fases: mergedFases,
+      metadata: { ...loaded!.metadata!, hash: 'after-sync' },
+    }, { type: 'libertadores', syncedBy: null });
+
+    const reloaded = await repo.load('libertadores');
+    expect(reloaded?.fases['Oitavas de Final'].matches[0].manualWinner).toBe('Time B0');
+    expect(reloaded?.fases['Quartas de Final'].matches[0].team1).toBe('Time B0');
+    expect(reloaded?.fases['Quartas de Final'].matches[0].team2).toBe('Time A1');
+    expect([...rows.keys()]).toEqual(['shadow/libertadores/2026']);
   });
 
   it('reports structural classification differences as WARNING, not MATCH', () => {
