@@ -1,5 +1,5 @@
 import { fetchStep } from './fetch.ts';
-import { normalizeTournamentData } from './normalize.ts';
+import { mergeCalculatedStandings, normalizeTournamentData } from './normalize.ts';
 import { standingsStep } from './standings.ts';
 import { logSync } from './log.ts';
 import { fetchJsonWithRetry } from '../http.ts';
@@ -144,9 +144,10 @@ export async function runPipeline(
   t = Date.now();
   const grupos = standingsStep(def, normalized.matches);
   mark('standings', t);
-  const classificacao = Object.keys(grupos).length
-    ? { grupos: grupos as unknown as Record<string, unknown[]> }
-    : normalized.classificacao;
+  const classificacao = mergeCalculatedStandings(
+    normalized.classificacao,
+    grupos as unknown as Record<string, unknown[]>,
+  );
 
   t = Date.now();
   const primary = adapters[0];
