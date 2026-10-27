@@ -512,7 +512,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     const statHeaders = ['P', 'J', 'V', 'E', 'D', 'SG'];
     const parseNum = (v: string) => parseFloat((v || '0').replace(',', '.')) || 0;
 
-    const sortRows = (rows: string[][]) => [...rows].sort((a, b) => {
+    const sortRows = (rows: string[][], groupName?: string) => [...rows].sort((a, b) => {
       const pDiff = parseNum(b[3]) - parseNum(a[3]);
       if (pDiff !== 0) return pDiff;
       const vDiff = parseNum(b[5]) - parseNum(a[5]);
@@ -521,7 +521,12 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       if (sgDiff !== 0) return sgDiff;
       const gpA = a.length >= 10 ? parseNum(a[a.length - 2]) : 0;
       const gpB = b.length >= 10 ? parseNum(b[b.length - 2]) : 0;
-      return gpB - gpA;
+      if (gpB !== gpA) return gpB - gpA;
+      const order = groupName ? (manualGroupOrders[groupName] ?? []) : [];
+      const rank = new Map(order.map((team, index) => [team, index]));
+      const rankA = rank.get((a[2] ?? '').trim());
+      const rankB = rank.get((b[2] ?? '').trim());
+      return rankA === undefined || rankB === undefined ? 0 : rankA - rankB;
     });
 
     const groupTieClusters = (rows: string[][]) => {
@@ -547,7 +552,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     };
 
     const groupsSorted = sortedGroups.map((group, gIdx) => {
-      const sorted = sortRows(group.rows).map((row, idx) => {
+      const sorted = sortRows(group.rows, group.name).map((row, idx) => {
         const newRow = [...row];
         newRow[0] = String(idx + 1);
         return newRow;
