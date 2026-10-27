@@ -3,6 +3,7 @@ import { resolveLibertadoresFinalResult } from '../utils/libertadoresResults';
 import { recalculateLibertadoresClassification, resolveLibertadoresClassification, resolveLibertadoresFinalists, resolveLibertadoresProgression, shouldRecalculateLibertadoresClassification, updateLibertadoresFases } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { resolveDefinition, selectAdapters } from '../../supabase/functions/_shared/tournament/registry';
 import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
+import { mergeLibertadoresFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
 
 const idByName = new Map([['timea', '101'], ['timeb', '102']]);
 
@@ -242,5 +243,25 @@ describe('Libertadores single-match final and third-place results', () => {
     expect(resolveLibertadoresFinalResult({
       team1: 'Time A', team2: 'Time B', scoreIda1: '90,00', scoreIda2: '',
     })).toBeNull();
+  });
+});
+
+
+describe('Libertadores manual decision cache preservation', () => {
+  it('preserves a manual knockout winner when the next API payload omits that field', () => {
+    const previous = {
+      Final: { matches: [{
+        matchNumber: 'FINAL', team1: 'Riverao FC', team2: 'Red Label SFX',
+        scoreIda1: '101,00', scoreIda2: '101,00', manualWinner: 'Red Label SFX',
+      }] },
+    };
+    const next = {
+      Final: { matches: [{
+        matchNumber: 'FINAL', team1: 'Riverao FC', team2: 'Red Label SFX',
+        scoreIda1: '101,00', scoreIda2: '101,00',
+      }] },
+    };
+    const merged = mergeLibertadoresFasesPreservingScores(previous, next) as any;
+    expect(merged.Final.matches[0].manualWinner).toBe('Red Label SFX');
   });
 });
