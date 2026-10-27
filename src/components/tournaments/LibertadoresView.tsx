@@ -133,8 +133,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
   const automaticPodium = useMemo(() => {
     if (!isFinal || !Array.isArray(knockoutData?.matches)) return null;
-    const normalizeLabel = (value: unknown) => String(value ?? '').normalize('NFD')
-      .replace(/[\\u0300-\\u036f]/g, '').toUpperCase();
+    const normalizeLabel = (value: unknown) => String(value ?? '').toUpperCase();
     const finalMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber) === 'FINAL') as any;
     const thirdMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber).includes('3') &&
       normalizeLabel(match.matchNumber).includes('LUGAR')) as any;
