@@ -28,7 +28,7 @@ export function applyManualLibertadoresWinner(
   if (
     !target ||
     ![target.team1, target.team2].includes(winner) ||
-    !isUnresolvedLibertadoresKnockoutTie(target, phaseName)
+    !isUnresolvedLibertadoresKnockoutTie(target as any, phaseName)
   ) {
     throw new Error('O confronto mudou ou não está mais empatado. Atualize a tela e tente novamente.');
   }
