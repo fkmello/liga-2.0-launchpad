@@ -345,6 +345,23 @@ function resolveTwoLeggedMatch(match: ContinentalMatch): { winner: string; loser
     : { winner: String(match.team2), loser: String(match.team1) };
 }
 
+function resolveSingleFinalMatch(match: ContinentalMatch): { winner: string; loser: string } | null {
+  if (!match?.team1 || !match?.team2) return null;
+  const score1 = parseKnockoutScore(match.scoreIda1);
+  const score2 = parseKnockoutScore(match.scoreIda2);
+  if (score1 === null || score2 === null) return null;
+  if (match.manualWinner === match.team1) return { winner: String(match.team1), loser: String(match.team2) };
+  if (match.manualWinner === match.team2) return { winner: String(match.team2), loser: String(match.team1) };
+  const volta1 = parseKnockoutScore(match.scoreVolta1);
+  const volta2 = parseKnockoutScore(match.scoreVolta2);
+  const total1 = score1 + (volta1 ?? 0);
+  const total2 = score2 + (volta2 ?? 0);
+  if (total1 === total2) return null;
+  return total1 > total2
+    ? { winner: String(match.team1), loser: String(match.team2) }
+    : { winner: String(match.team2), loser: String(match.team1) };
+}
+
 function replaceMatchTeams(match: ContinentalMatch, team1: string, team2: string): ContinentalMatch {
   if (match.team1 === team1 && match.team2 === team2) return match;
   // Do not carry scores from a different pairing into newly generated fixtures.
