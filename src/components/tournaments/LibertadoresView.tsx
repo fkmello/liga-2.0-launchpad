@@ -140,12 +140,19 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       normalizeLabel(match.matchNumber).includes('LUGAR')) as any;
     const winnerOf = (match: any) => {
       if (!match?.team1 || !match?.team2) return null;
-      const scores = [match.scoreIda1, match.scoreIda2, match.scoreVolta1, match.scoreVolta2];
-      if (scores.some(value => value === null || value === undefined || String(value).trim() === '')) return null;
-      const values = scores.map(value => Number(String(value).replace(',', '.')));
+      const firstLeg = [match.scoreIda1, match.scoreIda2];
+      if (firstLeg.some(value => value === null || value === undefined || String(value).trim() === '')) return null;
+      const values = firstLeg.map(value => Number(String(value).replace(',', '.')));
       if (values.some(value => !Number.isFinite(value))) return null;
-      const total1 = values[0] + values[2];
-      const total2 = values[1] + values[3];
+      const hasSecondLeg = [match.scoreVolta1, match.scoreVolta2].every(value =>
+        value !== null && value !== undefined && String(value).trim() !== ''
+      );
+      const secondLeg = hasSecondLeg
+        ? [Number(String(match.scoreVolta1).replace(',', '.')), Number(String(match.scoreVolta2).replace(',', '.'))]
+        : [0, 0];
+      if (secondLeg.some(value => !Number.isFinite(value))) return null;
+      const total1 = values[0] + secondLeg[0];
+      const total2 = values[1] + secondLeg[1];
       const manualWinner = String(match.manualWinner ?? '');
       if (total1 === total2) {
         if (manualWinner === match.team1) return { winner: match.team1, loser: match.team2 };
