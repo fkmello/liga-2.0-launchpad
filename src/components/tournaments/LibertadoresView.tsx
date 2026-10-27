@@ -598,7 +598,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
     return (
       <div className="space-y-6">
-        {isAdmin && globalTieClusters.map(teams => {
+        {globalTieClusters.map(teams => {
           const tieKey = teams.slice().sort().join('::');
           const savedOrder = manualGlobalOrder.filter(team => teams.includes(team));
           const pendingOrder = pendingGlobalOrders[tieKey] ?? savedOrder;
@@ -607,19 +607,23 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
             <div key={tieKey} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
               <p className="text-xs font-semibold text-amber-200">Empate na ordenação geral dos classificados</p>
               <p className="text-xs text-muted-foreground">Clique nos times na ordem do sorteio. A chave das oitavas só será gerada quando a ordem global estiver definida.</p>
-              <div className="flex flex-wrap gap-2">
-                {teams.map(team => (
-                  <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
-                    disabled={savingManualDecision || pendingOrder.includes(team)}
-                    onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
-                    {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGlobalTieOrder(pendingOrder)}>Salvar ordem do sorteio</Button>
-                <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [] }))}>Refazer ordem</Button>
-              </div>
+              {isAdmin ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {teams.map(team => (
+                      <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
+                        disabled={savingManualDecision || pendingOrder.includes(team)}
+                        onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
+                        {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGlobalTieOrder(pendingOrder)}>Salvar ordem do sorteio</Button>
+                    <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [] }))}>Refazer ordem</Button>
+                  </div>
+                </>
+              ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
             </div>
           );
         })}
@@ -629,7 +633,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           <div key={gIdx}>
             <h3 className="text-xs font-bold text-primary mb-2 uppercase tracking-wide">{name}</h3>
 
-            {isAdmin && groupTieClusters(classificacaoData.groups.find(g => g.name === name)?.rows ?? []).map((teams) => {
+            {groupTieClusters(classificacaoData.groups.find(g => g.name === name)?.rows ?? []).map((teams) => {
               const tieKey = `${name}::${teams.slice().sort().join('::')}`;
               const savedOrder = (manualGroupOrders[name] ?? []).filter(team => teams.includes(team));
               const pendingOrder = pendingGroupOrders[tieKey] ?? savedOrder;
@@ -638,23 +642,27 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
                 <div key={tieKey} className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                   <p className="text-xs font-semibold text-amber-200">Empate nos critérios de classificação</p>
                   <p className="text-xs text-muted-foreground">Clique nos times na ordem definida pelo sorteio. A chave não avança enquanto o desempate estiver pendente.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {teams.map(team => (
-                      <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
-                        disabled={savingManualDecision || pendingOrder.includes(team)}
-                        onClick={() => setPendingGroupOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
-                        {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGroupTieOrder(name, pendingOrder)}>
-                      Salvar ordem do sorteio
-                    </Button>
-                    <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGroupOrders(current => ({ ...current, [tieKey]: [] }))}>
-                      Refazer ordem
-                    </Button>
-                  </div>
+                  {isAdmin ? (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {teams.map(team => (
+                          <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
+                            disabled={savingManualDecision || pendingOrder.includes(team)}
+                            onClick={() => setPendingGroupOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
+                            {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGroupTieOrder(name, pendingOrder)}>
+                          Salvar ordem do sorteio
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGroupOrders(current => ({ ...current, [tieKey]: [] }))}>
+                          Refazer ordem
+                        </Button>
+                      </div>
+                    </>
+                  ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
                 </div>
               );
             })}
@@ -762,21 +770,23 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           </p>
         )}
 
-        {isAdmin && isKnockout && knockoutData.matches.some((match: any) => isUnresolvedKnockoutTie(match, fase)) && (
+        {isKnockout && knockoutData.matches.some((match: any) => isUnresolvedKnockoutTie(match, fase)) && (
           <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="text-sm font-semibold text-amber-200">Desempate manual necessário</p>
             <p className="text-xs text-muted-foreground">Há confronto empatado no agregado. Selecione o vencedor do sorteio; a escolha ficará salva no cache da Libertadores e será preservada pela sincronização.</p>
             {knockoutData.matches.filter((match: any) => isUnresolvedKnockoutTie(match, fase)).map((match: any) => (
               <div key={String(match.matchNumber)} className="space-y-2 rounded-md border border-border p-3">
                 <p className="text-xs font-semibold">{String(match.matchNumber ?? 'Confronto')} — {match.team1} x {match.team2}</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
-                    Vencedor: {match.team1}
-                  </Button>
-                  <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
-                    Vencedor: {match.team2}
-                  </Button>
-                </div>
+                {isAdmin ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
+                      Vencedor: {match.team1}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
+                      Vencedor: {match.team2}
+                    </Button>
+                  </div>
+                ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
               </div>
             ))}
             {manualDecisionError && <p className="text-xs text-destructive">{manualDecisionError}</p>}
