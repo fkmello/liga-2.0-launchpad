@@ -4,7 +4,7 @@ import { fetchCartolaTeams, fetchMercadoStatus, fetchTeamsRoundScores, type Cart
 
 type ContinentalMatch = Record<string, any>;
 type ContinentalFases = Record<string, any>;
-type RoundTarget = { kind: 'group'; groupRound: number } | { kind: 'knockout'; fase: string; leg: 'ida' | 'volta' };
+type RoundTarget = { kind: 'group'; groupRound: number } | { kind: 'knockout'; fase: string; leg: 'ida' | 'volta' | 'unico' };
 interface LibertadoresRaw {
   fases: ContinentalFases;
   classificacao: { grupos: Record<string, unknown[]> };
@@ -21,7 +21,7 @@ const ROUND_TO_TARGET: Record<number, RoundTarget> = {
   28: { kind: 'knockout', fase: 'Quartas de Final', leg: 'volta' },
   31: { kind: 'knockout', fase: 'Semifinal', leg: 'ida' },
   32: { kind: 'knockout', fase: 'Semifinal', leg: 'volta' },
-  37: { kind: 'knockout', fase: 'Final', leg: 'ida' },
+  37: { kind: 'knockout', fase: 'Final', leg: 'unico' },
 };
 
 /** Rodadas da API que correspondem a fases mapeadas da Libertadores. */
@@ -90,8 +90,10 @@ export function updateLibertadoresFases(
 
   const phase = fases[target.fase];
   if (!phase || !Array.isArray(phase.matches)) return fases;
-  const scoreKey1 = target.leg === 'ida' ? 'scoreIda1' : 'scoreVolta1';
-  const scoreKey2 = target.leg === 'ida' ? 'scoreIda2' : 'scoreVolta2';
+  // A final/terceiro lugar é jogo único. Para compatibilidade com o cache e a tela,
+  // seus placares ficam em scoreIda1/scoreIda2 (os campos usados como placar principal).
+  const scoreKey1 = target.leg === 'volta' ? 'scoreVolta1' : 'scoreIda1';
+  const scoreKey2 = target.leg === 'volta' ? 'scoreVolta2' : 'scoreIda2';
   return {
     ...fases,
     [target.fase]: {
