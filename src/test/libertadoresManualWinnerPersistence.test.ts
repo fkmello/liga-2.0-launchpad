@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { resolveLibertadoresProgression } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 import { mergeLibertadoresFasesPreservingScores } from '../../supabase/functions/_shared/cache/roundPreservation';
 
-describe('persistência do vencedor manual da Libertadores', () => {
-  it('mantém a escolha após atualização da API e usa o vencedor na próxima fase', () => {
+describe('preservação do vencedor manual da Libertadores durante sincronização', () => {
+  it('mantém a escolha quando a API omite o campo e usa o vencedor na próxima fase', () => {
     const previousMatches = Array.from({ length: 8 }, (_, index) => ({
       matchNumber: String(index + 1),
       team1: `Time A${index}`,
