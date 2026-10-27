@@ -175,7 +175,7 @@ describe('pipeline validation indicators', () => {
 
     // Simula a próxima sincronização da API: ela não envia manualWinner.
     const loaded = await repo.load('libertadores');
-    expect(loaded?.fases['Oitavas de Final'].matches[0].manualWinner).toBe('Time B0');
+    expect((loaded?.fases['Oitavas de Final'] as any)?.matches[0].manualWinner).toBe('Time B0');
     const apiFases = updateLibertadoresFases(
       loaded!.fases as any,
       24,
@@ -193,9 +193,9 @@ describe('pipeline validation indicators', () => {
     }, { type: 'libertadores', syncedBy: null });
 
     const reloaded = await repo.load('libertadores');
-    expect(reloaded?.fases['Oitavas de Final'].matches[0].manualWinner).toBe('Time B0');
-    expect(reloaded?.fases['Quartas de Final'].matches[0].team1).toBe('Time B0');
-    expect(reloaded?.fases['Quartas de Final'].matches[0].team2).toBe('Time A1');
+    expect((reloaded?.fases['Oitavas de Final'] as any)?.matches[0].manualWinner).toBe('Time B0');
+    expect((reloaded?.fases['Quartas de Final'] as any)?.matches[0].team1).toBe('Time B0');
+    expect((reloaded?.fases['Quartas de Final'] as any)?.matches[0].team2).toBe('Time A1');
     expect([...rows.keys()]).toEqual(['shadow/libertadores/2026']);
   });
 
