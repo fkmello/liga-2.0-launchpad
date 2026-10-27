@@ -2,11 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { resolveSemanticCompareStatus } from '../../supabase/functions/_shared/cache/compareStatus';
 import { buildCoverageReport } from '../../supabase/functions/_shared/sync/validation/coverage';
 import { diffLibertadoresClassification } from '../../supabase/functions/_shared/sync/validation/standingsDiff';
+import { normalizeTournamentData } from '../../supabase/functions/_shared/sync/pipeline/normalize';
 
 const oldRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '28,00'];
 const newRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '474,85', '28,00'];
 
 describe('pipeline validation indicators', () => {
+  it('preserves manual Libertadores classification decisions through normalization', () => {
+    const manualDecisions = {
+      grupos: { 'GRUPO A': ['Time A', 'Time B'] },
+      global: ['Time A', 'Time B'],
+    };
+    const adapter = {
+      toClassificacao: () => ({
+        grupos: { 'GRUPO A': [['1', '', 'Time A', '12']] },
+        desempatesManuais: manualDecisions,
+      }),
+    } as any;
+
+    const normalized = normalizeTournamentData([adapter], [{}], {} as any);
+
+    expect(normalized.classificacao.grupos['GRUPO A']).toEqual([['1', '', 'Time A', '12']]);
+    expect((normalized.classificacao as any).desempatesManuais).toEqual(manualDecisions);
+  });
   it('reports structural classification differences as WARNING, not MATCH', () => {
     expect(resolveSemanticCompareStatus(['classificacao'], false).status).toBe('WARNING');
     expect(resolveSemanticCompareStatus([], false).status).toBe('MATCH');
