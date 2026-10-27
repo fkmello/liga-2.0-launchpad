@@ -1,8 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { DEFAULT_SEASON } from '@/config/tournamentCacheKeys';
 import {
   useDadosExternosLibertadores,
   useClassificacaoLibertadores,
@@ -61,6 +65,10 @@ interface LibertadoresViewProps {
 
 const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
+  const [manualDecisionError, setManualDecisionError] = useState<string | null>(null);
+  const [savingManualDecision, setSavingManualDecision] = useState(false);
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
   const hasInitialGroupRoundFromUrl = initialFase === 'Fase de Grupos' && initialRodadaGrupos !== undefined;
@@ -152,6 +160,49 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       thirdBadge: badgeFor(thirdResult.winner),
     };
   }, [isFinal, knockoutData, badgeUrls]);
+
+  const isSingleMatchTie = (match: any) => {
+    if (!match?.team1 || !match?.team2) return false;
+    const score1 = match.scoreIda1 === null || match.scoreIda1 === undefined || String(match.scoreIda1).trim() === ''
+      ? null : Number(String(match.scoreIda1).replace(',', '.'));
+    const score2 = match.scoreIda2 === null || match.scoreIda2 === undefined || String(match.scoreIda2).trim() === ''
+      ? null : Number(String(match.scoreIda2).replace(',', '.'));
+    return score1 !== null && score2 !== null && Number.isFinite(score1) && Number.isFinite(score2) && score1 === score2;
+  };
+
+  const saveManualWinner = async (matchNumber: string, winner: string) => {
+    if (!isAdmin || !winner || savingManualDecision) return;
+    setSavingManualDecision(true);
+    setManualDecisionError(null);
+    try {
+      const cacheKey = `shadow/libertadores/${DEFAULT_SEASON}`;
+      const { data: row, error: readError } = await supabase
+        .from('sheets_cache')
+        .select('data')
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
+      const payload = row.data as any;
+      const matches = payload?.fases?.Final?.matches;
+      if (!Array.isArray(matches)) throw new Error('A fase Final não foi encontrada no cache.');
+      const target = matches.find((item: any) => String(item?.matchNumber ?? '').trim().toUpperCase() === matchNumber.toUpperCase());
+      if (!target || ![target.team1, target.team2].includes(winner) || !isSingleMatchTie(target)) {
+        throw new Error('O confronto mudou ou não está mais empatado. Atualize a tela e tente novamente.');
+      }
+      target.manualWinner = winner;
+      const { error: saveError } = await supabase
+        .from('sheets_cache')
+        .update({ data: payload })
+        .eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-libertadores'] });
+    } catch (error) {
+      setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate.');
+    } finally {
+      setSavingManualDecision(false);
+    }
+  };
 
   // Determine the active Cartola round for partial scores
   const activeCartolaRound = useMemo(() => {
@@ -501,6 +552,31 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           <p className="text-center text-sm text-muted-foreground py-8">
             Nenhum confronto encontrado para esta fase.
           </p>
+        )}
+
+        {isAdmin && isFinal && knockoutData.matches.some((match: any) => isSingleMatchTie(match)) && (
+          <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-sm font-semibold text-amber-200">Desempate manual necessário</p>
+            <p className="text-xs text-muted-foreground">Há empate em um jogo decisivo. Selecione o vencedor do sorteio; a escolha ficará salva no cache da Libertadores e será preservada pela sincronização.</p>
+            {knockoutData.matches.filter((match: any) => isSingleMatchTie(match)).map((match: any) => (
+              <div key={String(match.matchNumber)} className="space-y-2 rounded-md border border-border p-3">
+                <p className="text-xs font-semibold">{String(match.matchNumber ?? 'Confronto')} — {match.team1} x {match.team2}</p>
+                {match.manualWinner ? (
+                  <p className="text-xs text-emerald-300">Desempate registrado: {match.manualWinner}</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(String(match.matchNumber ?? ''), String(match.team1))}>
+                      Vencedor: {match.team1}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(String(match.matchNumber ?? ''), String(match.team2))}>
+                      Vencedor: {match.team2}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {manualDecisionError && <p className="text-xs text-destructive">{manualDecisionError}</p>}
+          </div>
         )}
 
         {/* Libertadores podium appears automatically when final and third-place results are complete. */}
