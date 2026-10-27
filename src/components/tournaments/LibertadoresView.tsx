@@ -161,16 +161,27 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     };
   }, [isFinal, knockoutData, badgeUrls]);
 
-  const isSingleMatchTie = (match: any) => {
-    if (!match?.team1 || !match?.team2) return false;
-    const score1 = match.scoreIda1 === null || match.scoreIda1 === undefined || String(match.scoreIda1).trim() === ''
-      ? null : Number(String(match.scoreIda1).replace(',', '.'));
-    const score2 = match.scoreIda2 === null || match.scoreIda2 === undefined || String(match.scoreIda2).trim() === ''
-      ? null : Number(String(match.scoreIda2).replace(',', '.'));
-    return score1 !== null && score2 !== null && Number.isFinite(score1) && Number.isFinite(score2) && score1 === score2;
+  const parseKnockoutScore = (value: unknown): number | null => {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    const parsed = Number(String(value).replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const saveManualWinner = async (matchNumber: string, winner: string) => {
+  const isUnresolvedKnockoutTie = (match: any, phaseName = fase) => {
+    if (!match?.team1 || !match?.team2 || match.manualWinner) return false;
+    const ida1 = parseKnockoutScore(match.scoreIda1);
+    const ida2 = parseKnockoutScore(match.scoreIda2);
+    if (ida1 === null || ida2 === null) return false;
+    const volta1 = parseKnockoutScore(match.scoreVolta1);
+    const volta2 = parseKnockoutScore(match.scoreVolta2);
+    const singleMatch = phaseName === 'Final' && (String(match.matchNumber ?? '').toUpperCase() === 'FINAL' ||
+      String(match.matchNumber ?? '').toUpperCase().includes('LUGAR'));
+    if (singleMatch && volta1 === null && volta2 === null) return ida1 === ida2;
+    if (volta1 === null || volta2 === null) return false;
+    return ida1 + volta1 === ida2 + volta2;
+  };
+
+  const saveManualWinner = async (phaseName: string, matchNumber: string, winner: string) => {
     if (!isAdmin || !winner || savingManualDecision) return;
     setSavingManualDecision(true);
     setManualDecisionError(null);
@@ -184,10 +195,10 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       if (readError) throw readError;
       if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
       const payload = row.data as any;
-      const matches = payload?.fases?.Final?.matches;
-      if (!Array.isArray(matches)) throw new Error('A fase Final não foi encontrada no cache.');
+      const matches = payload?.fases?.[phaseName]?.matches;
+      if (!Array.isArray(matches)) throw new Error(`A fase ${phaseName} não foi encontrada no cache.`);
       const target = matches.find((item: any) => String(item?.matchNumber ?? '').trim().toUpperCase() === matchNumber.toUpperCase());
-      if (!target || ![target.team1, target.team2].includes(winner) || !isSingleMatchTie(target)) {
+      if (!target || ![target.team1, target.team2].includes(winner) || !isUnresolvedKnockoutTie(target, phaseName)) {
         throw new Error('O confronto mudou ou não está mais empatado. Atualize a tela e tente novamente.');
       }
       target.manualWinner = winner;
@@ -554,25 +565,21 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           </p>
         )}
 
-        {isAdmin && isFinal && knockoutData.matches.some((match: any) => isSingleMatchTie(match)) && (
+        {isAdmin && isKnockout && knockoutData.matches.some((match: any) => isUnresolvedKnockoutTie(match, fase)) && (
           <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="text-sm font-semibold text-amber-200">Desempate manual necessário</p>
-            <p className="text-xs text-muted-foreground">Há empate em um jogo decisivo. Selecione o vencedor do sorteio; a escolha ficará salva no cache da Libertadores e será preservada pela sincronização.</p>
-            {knockoutData.matches.filter((match: any) => isSingleMatchTie(match)).map((match: any) => (
+            <p className="text-xs text-muted-foreground">Há confronto empatado no agregado. Selecione o vencedor do sorteio; a escolha ficará salva no cache da Libertadores e será preservada pela sincronização.</p>
+            {knockoutData.matches.filter((match: any) => isUnresolvedKnockoutTie(match, fase)).map((match: any) => (
               <div key={String(match.matchNumber)} className="space-y-2 rounded-md border border-border p-3">
                 <p className="text-xs font-semibold">{String(match.matchNumber ?? 'Confronto')} — {match.team1} x {match.team2}</p>
-                {match.manualWinner ? (
-                  <p className="text-xs text-emerald-300">Desempate registrado: {match.manualWinner}</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(String(match.matchNumber ?? ''), String(match.team1))}>
-                      Vencedor: {match.team1}
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(String(match.matchNumber ?? ''), String(match.team2))}>
-                      Vencedor: {match.team2}
-                    </Button>
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
+                    Vencedor: {match.team1}
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
+                    Vencedor: {match.team2}
+                  </Button>
+                </div>
               </div>
             ))}
             {manualDecisionError && <p className="text-xs text-destructive">{manualDecisionError}</p>}
