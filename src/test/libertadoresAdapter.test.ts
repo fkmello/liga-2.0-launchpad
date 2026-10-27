@@ -160,8 +160,8 @@ describe('Libertadores adapter', () => {
     for (let round = 1; round <= 6; round++) fases['Fase de Grupos'][`rodada_${round}`] = { groups: groupMatches };
     const result = resolveLibertadoresProgression(fases, { grupos });
     expect(result['Oitavas de Final'].matches.map((m: any) => [m.team1, m.team2])).toEqual([
-      ['Time 01', 'Time 16'], ['Time 02', 'Time 15'], ['Time 03', 'Time 14'], ['Time 04', 'Time 13'],
-      ['Time 05', 'Time 12'], ['Time 06', 'Time 11'], ['Time 07', 'Time 10'], ['Time 08', 'Time 09'],
+      ['Time 01', 'Time 16'], ['Time 03', 'Time 14'], ['Time 05', 'Time 12'], ['Time 07', 'Time 10'],
+      ['Time 09', 'Time 08'], ['Time 11', 'Time 06'], ['Time 13', 'Time 04'], ['Time 15', 'Time 02'],
     ]);
     const incomplete = { ...fases, 'Fase de Grupos': { ...fases['Fase de Grupos'], rodada_6: { groups: [{ name: 'Grupo 1', matches: [{ team1: 'Time 01', team2: 'Time 02', score1: '', score2: '' }] }] } } };
     expect(resolveLibertadoresProgression(incomplete, { grupos })['Oitavas de Final'].matches[0].team1).toBe('');
