@@ -106,6 +106,54 @@ export function updateLibertadoresFases(
 }
 
 
+function parseKnockoutScore(value: unknown): number | null {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const score = Number(String(value).replace(',', '.'));
+  return Number.isFinite(score) ? score : null;
+}
+
+/**
+ * Depois dos dois jogos da semifinal, preenche os classificados para a final
+ * e os eliminados para a disputa do terceiro lugar. Se houver placar faltando
+ * ou empate no agregado, não inventa classificação nem apaga os nomes existentes.
+ */
+export function resolveLibertadoresFinalists(fases: ContinentalFases): ContinentalFases {
+  const semifinal = fases?.Semifinal;
+  const final = fases?.Final;
+  if (!Array.isArray(semifinal?.matches) || !Array.isArray(final?.matches)) return fases;
+
+  const qualifiers = semifinal.matches.map((match: ContinentalMatch) => {
+    const ida1 = parseKnockoutScore(match.scoreIda1);
+    const ida2 = parseKnockoutScore(match.scoreIda2);
+    const volta1 = parseKnockoutScore(match.scoreVolta1);
+    const volta2 = parseKnockoutScore(match.scoreVolta2);
+    if (!match.team1 || !match.team2 || ida1 === null || ida2 === null || volta1 === null || volta2 === null) return null;
+
+    const total1 = ida1 + volta1;
+    const total2 = ida2 + volta2;
+    if (total1 === total2) return null;
+    return total1 > total2
+      ? { winner: String(match.team1), loser: String(match.team2) }
+      : { winner: String(match.team2), loser: String(match.team1) };
+  });
+
+  if (qualifiers.length < 2 || !qualifiers[0] || !qualifiers[1]) return fases;
+
+  const finalMatches = final.matches.map((match: ContinentalMatch) => {
+    const label = String(match.matchNumber ?? '').toLocaleUpperCase('pt-BR');
+    if (label === 'FINAL') {
+      return { ...match, team1: qualifiers[0]!.winner, team2: qualifiers[1]!.winner };
+    }
+    if (label.includes('3') && label.includes('LUGAR')) {
+      return { ...match, team1: qualifiers[0]!.loser, team2: qualifiers[1]!.loser };
+    }
+    return match;
+  });
+
+  return { ...fases, Final: { ...final, matches: finalMatches } };
+}
+
+
 type GroupStanding = { team: string; points: number; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDiff: number };
 
 function parseFantasyScore(value: unknown): number | null {
@@ -245,10 +293,13 @@ export const cartolaLibertadoresAdapter: TournamentAdapter<LibertadoresRaw> = {
       scores,
       buildIdByName(ctx),
     );
+    // Reavalia os classificados sempre que houver placares completos das duas semifinais.
+    // A função não altera a fase Final enquanto os agregados não puderem ser determinados.
+    const fasesWithFinalists = resolveLibertadoresFinalists(updatedFases);
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
-    const updatedClassification = resolveLibertadoresClassification(updatedFases, targetRound, previousClassification);
+    const updatedClassification = resolveLibertadoresClassification(fasesWithFinalists, targetRound, previousClassification);
 
-    return { fases: updatedFases, classificacao: updatedClassification, teams };
+    return { fases: fasesWithFinalists, classificacao: updatedClassification, teams };
   },
   toFases(raw) { return raw.fases; },
   toClassificacao(raw) { return raw.classificacao; },
