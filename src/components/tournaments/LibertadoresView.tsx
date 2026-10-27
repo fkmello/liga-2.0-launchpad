@@ -71,6 +71,8 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   const [savingManualDecision, setSavingManualDecision] = useState(false);
   const [manualGroupOrders, setManualGroupOrders] = useState<Record<string, string[]>>({});
   const [pendingGroupOrders, setPendingGroupOrders] = useState<Record<string, string[]>>({});
+  const [manualGlobalOrder, setManualGlobalOrder] = useState<string[]>([]);
+  const [pendingGlobalOrders, setPendingGlobalOrders] = useState<Record<string, string[]>>({});
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
   const hasInitialGroupRoundFromUrl = initialFase === 'Fase de Grupos' && initialRodadaGrupos !== undefined;
@@ -96,8 +98,10 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
         .eq('cache_key', `shadow/libertadores/${DEFAULT_SEASON}`)
         .maybeSingle();
       if (cancelled || error) return;
-      const orders = (data?.data as any)?.classificacao?.desempatesManuais?.grupos;
+      const decisions = (data?.data as any)?.classificacao?.desempatesManuais;
+      const orders = decisions?.grupos;
       if (orders && typeof orders === 'object') setManualGroupOrders(orders);
+      if (Array.isArray(decisions?.global)) setManualGlobalOrder(decisions.global);
     };
     void loadManualGroupOrders();
     return () => { cancelled = true; };
@@ -139,6 +143,36 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       await queryClient.invalidateQueries({ queryKey: ['confrontos-libertadores'] });
     } catch (error) {
       setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate do grupo.');
+    } finally {
+      setSavingManualDecision(false);
+    }
+  };
+
+  const saveGlobalTieOrder = async (teams: string[]) => {
+    if (!isAdmin || savingManualDecision || teams.length < 2) return;
+    setSavingManualDecision(true);
+    setManualDecisionError(null);
+    try {
+      const cacheKey = `shadow/libertadores/${DEFAULT_SEASON}`;
+      const { data: row, error: readError } = await supabase.from('sheets_cache').select('data').eq('cache_key', cacheKey).maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
+      const payload = row.data as any;
+      payload.classificacao = payload.classificacao ?? { grupos: {} };
+      payload.classificacao.desempatesManuais = payload.classificacao.desempatesManuais ?? {};
+      const previous: string[] = payload.classificacao.desempatesManuais.global ?? [];
+      payload.classificacao.desempatesManuais.global = [...previous.filter(team => !teams.includes(team)), ...teams];
+      const { error: saveError } = await supabase.from('sheets_cache').update({ data: payload }).eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+      setManualGlobalOrder(payload.classificacao.desempatesManuais.global);
+      setPendingGlobalOrders(current => {
+        const next = { ...current };
+        delete next[teams.slice().sort().join('::')];
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-libertadores'] });
+    } catch (error) {
+      setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate global.');
     } finally {
       setSavingManualDecision(false);
     }
@@ -521,6 +555,30 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       return { gIdx, name: group.name, rows: sorted };
     });
 
+    const qualifiedRows = groupsSorted.flatMap(group => group.rows.slice(0, 2).map(row => ({
+      team: (row[2] ?? '').trim(),
+      points: parseNum(row[3]),
+      wins: parseNum(row[5]),
+      goalDiff: parseNum(row[row.length - 1]),
+      goalsFor: parseNum(row.length >= 10 ? row[row.length - 2] : '0'),
+    }))).filter(row => !!row.team).sort((a, b) =>
+      b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor
+    );
+    const globalTieClusters: string[][] = [];
+    let globalCluster: string[] = [];
+    const globalCriteriaEqual = (a: typeof qualifiedRows[number], b: typeof qualifiedRows[number]) =>
+      a.points === b.points && a.wins === b.wins && a.goalDiff === b.goalDiff && a.goalsFor === b.goalsFor;
+    for (let i = 0; i < qualifiedRows.length; i++) {
+      if (i > 0 && globalCriteriaEqual(qualifiedRows[i - 1], qualifiedRows[i])) {
+        if (globalCluster.length === 0) globalCluster.push(qualifiedRows[i - 1].team);
+        globalCluster.push(qualifiedRows[i].team);
+      } else {
+        if (globalCluster.length > 1) globalTieClusters.push(globalCluster);
+        globalCluster = [];
+      }
+    }
+    if (globalCluster.length > 1) globalTieClusters.push(globalCluster);
+
     // Compute 2 best thirds across all groups
     const thirds = groupsSorted
       .map(g => ({ gIdx: g.gIdx, row: g.rows[2] }))
@@ -540,6 +598,32 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
     return (
       <div className="space-y-6">
+        {isAdmin && globalTieClusters.map(teams => {
+          const tieKey = teams.slice().sort().join('::');
+          const savedOrder = manualGlobalOrder.filter(team => teams.includes(team));
+          const pendingOrder = pendingGlobalOrders[tieKey] ?? savedOrder;
+          const complete = pendingOrder.length === teams.length && new Set(pendingOrder).size === teams.length;
+          return (
+            <div key={tieKey} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-200">Empate na ordenação geral dos classificados</p>
+              <p className="text-xs text-muted-foreground">Clique nos times na ordem do sorteio. A chave das oitavas só será gerada quando a ordem global estiver definida.</p>
+              <div className="flex flex-wrap gap-2">
+                {teams.map(team => (
+                  <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
+                    disabled={savingManualDecision || pendingOrder.includes(team)}
+                    onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
+                    {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGlobalTieOrder(pendingOrder)}>Salvar ordem do sorteio</Button>
+                <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [] }))}>Refazer ordem</Button>
+              </div>
+            </div>
+          );
+        })}
+        {manualDecisionError && isGroupStage && <p className="text-xs text-destructive">{manualDecisionError}</p>}
         {groupsSorted.map(({ gIdx, name, rows: sortedRows }) => {
           return (
           <div key={gIdx}>
