@@ -4,6 +4,7 @@ import { buildCoverageReport } from '../../supabase/functions/_shared/sync/valid
 import { diffLibertadoresClassification } from '../../supabase/functions/_shared/sync/validation/standingsDiff';
 import { normalizeTournamentData } from '../../supabase/functions/_shared/sync/pipeline/normalize';
 import { mergeTournamentPayload } from '../../supabase/functions/_shared/cache/payload';
+import { createShadowRepository } from '../../supabase/functions/_shared/cache/shadowRepository';
 
 const oldRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '28,00'];
 const newRow = ['1', '', 'Time A', '12', '6', '4', '0', '2', '474,85', '28,00'];
@@ -44,6 +45,66 @@ describe('pipeline validation indicators', () => {
 
     expect((merged.classificacao as any).desempatesManuais).toEqual(manualDecisions);
   });
+  it('persists manual decisions only in the isolated shadow cache and reloads them', async () => {
+    const rows = new Map<string, any>();
+    const upsertedKeys: string[] = [];
+    const supabaseAdmin = {
+      from(table: string) {
+        if (table !== 'sheets_cache') throw new Error(`Unexpected table: ${table}`);
+        let selectedKey = '';
+        return {
+          select() { return this; },
+          eq(column: string, value: string) {
+            if (column !== 'cache_key') throw new Error(`Unexpected column: ${column}`);
+            selectedKey = value;
+            return this;
+          },
+          async maybeSingle() {
+            const row = rows.get(selectedKey);
+            return { data: row ? { data: row.data } : null, error: null };
+          },
+          async upsert(row: any, options: any) {
+            expect(options).toEqual({ onConflict: 'cache_key' });
+            upsertedKeys.push(row.cache_key);
+            rows.set(row.cache_key, row);
+            return { error: null };
+          },
+        };
+      },
+    };
+    const manualDecisions = {
+      grupos: { 'GRUPO A': ['Time A', 'Time B'] },
+      global: ['Time A', 'Time B'],
+    };
+    const payload = {
+      version: 1,
+      synced_at: '2026-10-27T21:00:00.000Z',
+      fases: { Semifinal: { matches: [{ team1: 'Time A', team2: 'Time B' }] } },
+      classificacao: {
+        grupos: { 'GRUPO A': [['1', '', 'Time A', '12']] },
+        desempatesManuais: manualDecisions,
+      },
+      dados_externos: { rows: [] },
+      metadata: { hash: 'test-hash' },
+    } as any;
+    const repo = createShadowRepository({
+      supabaseAdmin,
+      league: 'libertadores',
+      season: 2026,
+      legacyReader: async () => null,
+    });
+
+    const saved = await repo.save('libertadores', payload, { type: 'libertadores', syncedBy: null });
+
+    expect(saved).toEqual({ changed: true });
+    expect(repo.shadowKey).toBe('shadow/libertadores/2026');
+    expect(upsertedKeys).toEqual(['shadow/libertadores/2026']);
+    expect(rows.has('libertadores')).toBe(false);
+    expect(rows.get('shadow/libertadores/2026').type).toBe('shadow_libertadores');
+    expect(rows.get('shadow/libertadores/2026').data.classificacao.desempatesManuais).toEqual(manualDecisions);
+    expect((await repo.load('libertadores'))?.classificacao.desempatesManuais).toEqual(manualDecisions);
+  });
+
   it('reports structural classification differences as WARNING, not MATCH', () => {
     expect(resolveSemanticCompareStatus(['classificacao'], false).status).toBe('WARNING');
     expect(resolveSemanticCompareStatus([], false).status).toBe('MATCH');
