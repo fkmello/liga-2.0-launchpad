@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveSemanticCompareStatus } from '../../supabase/functions/_shared/cache/compareStatus';
 import { buildCoverageReport } from '../../supabase/functions/_shared/sync/validation/coverage';
 import { diffLibertadoresClassification } from '../../supabase/functions/_shared/sync/validation/standingsDiff';
-import { normalizeTournamentData } from '../../supabase/functions/_shared/sync/pipeline/normalize';
+import { mergeCalculatedStandings, normalizeTournamentData } from '../../supabase/functions/_shared/sync/pipeline/normalize';
 import { mergeTournamentPayload } from '../../supabase/functions/_shared/cache/payload';
 import { createShadowRepository } from '../../supabase/functions/_shared/cache/shadowRepository';
 
@@ -27,6 +27,17 @@ describe('pipeline validation indicators', () => {
     expect(normalized.classificacao.grupos['GRUPO A']).toEqual([['1', '', 'Time A', '12']]);
     expect((normalized.classificacao as any).desempatesManuais).toEqual(manualDecisions);
 
+    // Este é o passo do pipeline que aplica a classificação calculada; ele
+    // deve substituir apenas os grupos e manter as decisões manuais.
+    const classificationAfterStandings = mergeCalculatedStandings(
+      normalized.classificacao,
+      { 'GRUPO A': [['1', '', 'Time A', '12', '6', '4', '0', '2', '28,00']] },
+    );
+    expect(classificationAfterStandings.grupos['GRUPO A']).toEqual([
+      ['1', '', 'Time A', '12', '6', '4', '0', '2', '28,00'],
+    ]);
+    expect((classificationAfterStandings as any).desempatesManuais).toEqual(manualDecisions);
+
     const previous = {
       version: 1,
       synced_at: '2026-01-01T00:00:00.000Z',
@@ -39,7 +50,7 @@ describe('pipeline validation indicators', () => {
     };
     const next = {
       ...previous,
-      classificacao: normalized.classificacao,
+      classificacao: classificationAfterStandings,
     };
     const merged = mergeTournamentPayload({ mergeableKeys: [] } as any, previous as any, next as any);
 
