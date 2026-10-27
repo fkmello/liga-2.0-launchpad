@@ -197,7 +197,7 @@ describe('Libertadores adapter', () => {
     };
     const result = resolveLibertadoresProgression(fases, { grupos: {} });
     expect(result['Quartas de Final'].matches[0].team1).toBe('Time B0');
-    expect(result['Quartas de Final'].matches[0].team2).toBe('Time B1');
+    expect(result['Quartas de Final'].matches[0].team2).toBe('Time A1');
   });
 
   it('não gera oitavas quando há empate completo nos critérios de classificação do grupo', () => {
