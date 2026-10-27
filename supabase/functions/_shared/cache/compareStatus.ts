@@ -44,3 +44,30 @@ export function resolveCompareStatus(fieldsDiffering: string[]): CompareStatusRe
       : 'MATCH';
   return { status, functional_fields, technical_fields };
 }
+
+
+/**
+ * Classificação pode mudar de representação sem mudar os resultados esportivos.
+ * Nessa situação o compare deve ser WARNING, nunca MATCH. Se houver divergência
+ * esportiva ou outro campo funcional divergente, o status permanece ERROR.
+ */
+export function resolveSemanticCompareStatus(
+  fieldsDiffering: string[],
+  hasStandingsDivergences: boolean,
+): CompareStatusResult {
+  const strict = resolveCompareStatus(fieldsDiffering);
+  if (!fieldsDiffering.includes('classificacao') || hasStandingsDivergences) {
+    return strict;
+  }
+
+  const withoutClassification = resolveCompareStatus(
+    fieldsDiffering.filter((field) => field !== 'classificacao'),
+  );
+  if (withoutClassification.status === 'ERROR') return withoutClassification;
+
+  return {
+    status: 'WARNING',
+    functional_fields: withoutClassification.functional_fields,
+    technical_fields: [...withoutClassification.technical_fields, 'classificacao'],
+  };
+}

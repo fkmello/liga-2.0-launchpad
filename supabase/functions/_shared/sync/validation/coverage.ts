@@ -68,10 +68,30 @@ function matchKey(round: string, home: unknown, away: unknown): string | null {
 }
 
 /**
+ * A Libertadores usa uma matriz própria: [posição, vazio, equipe, pontos,
+ * jogos, vitórias, empates, derrotas, saldo] no formato antigo e acrescenta
+ * pontos pró antes do saldo no formato novo. Não usar os índices da Série A/B.
+ */
+function countLibertadoresClassificationRows(payload: TournamentCachePayload | null): number {
+  let count = 0;
+  for (const rows of Object.values(payload?.classificacao?.grupos ?? {})) {
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows as unknown[]) {
+      if (!Array.isArray(row) || row.length < 9) continue;
+      const team = String(row[2] ?? '').trim();
+      const points = Number(String(row[3] ?? '').replace(',', '.'));
+      if (team && Number.isFinite(points)) count++;
+    }
+  }
+  return count;
+}
+
+/**
  * Relatório de cobertura: identifica rapidamente se algum dado deixou de ser
  * carregado pela API, antes mesmo de comparar payloads. Auditoria apenas.
  */
 export function buildCoverageReport(input: {
+  league?: string;
   baseline: TournamentCachePayload | null;
   generated: TournamentCachePayload;
   matches: MatchInput[];
@@ -85,15 +105,20 @@ export function buildCoverageReport(input: {
     ...matchKeysFromMatches(input.matches),
   ]);
 
-  const standings_generated = Object.values(input.standings).reduce((n, r) => n + r.length, 0);
-  const standings_expected = Object.values(input.baseline?.classificacao?.grupos ?? {}).reduce(
-    (n, r) =>
-      n +
-      (Array.isArray(r)
-        ? r.filter((row) => (Array.isArray(row) ? isLegacyStandingsTeamRow(row) : !!row)).length
-        : 0),
-    0,
-  );
+  const genericStandingsCount = Object.values(input.standings).reduce((n, r) => n + r.length, 0);
+  const standings_generated = input.league === 'libertadores'
+    ? countLibertadoresClassificationRows(input.generated)
+    : genericStandingsCount;
+  const standings_expected = input.league === 'libertadores'
+    ? countLibertadoresClassificationRows(input.baseline)
+    : Object.values(input.baseline?.classificacao?.grupos ?? {}).reduce(
+        (n, r) =>
+          n +
+          (Array.isArray(r)
+            ? r.filter((row) => (Array.isArray(row) ? isLegacyStandingsTeamRow(row) : !!row)).length
+            : 0),
+        0,
+      );
 
   return {
     teams_expected: expectedTeams.size,

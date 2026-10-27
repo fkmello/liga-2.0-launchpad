@@ -10,9 +10,9 @@ import {
   validateTournamentPayload,
 } from '../../cache/payload.ts';
 import { diffPayloads } from '../../cache/diff.ts';
-import { resolveCompareStatus, type CompareStatus } from '../../cache/compareStatus.ts';
+import { resolveSemanticCompareStatus, type CompareStatus } from '../../cache/compareStatus.ts';
 import { buildCoverageReport, type CoverageReport } from '../validation/coverage.ts';
-import { diffStandings, type StandingsDivergence } from '../validation/standingsDiff.ts';
+import { diffLibertadoresClassification, diffStandings, type StandingsDivergence } from '../validation/standingsDiff.ts';
 import type { CacheRepository } from '../../cache/repository.ts';
 import type {
   AdapterContext,
@@ -179,19 +179,21 @@ export async function runPipeline(
   base.hash_atual = current?.metadata?.hash ?? '';
   base.hash_novo = payload.metadata?.hash ?? '';
   base.coverage = buildCoverageReport({
+    league: def.league,
     baseline: current,
     generated: payload,
     matches: normalized.matches,
     standings: grupos,
   });
-  base.standings_divergences = diffStandings(current, grupos);
+  base.standings_divergences = def.league === 'libertadores'
+    ? diffLibertadoresClassification(current, payload.classificacao)
+    : diffStandings(current, grupos);
 
-  // Auditoria: 'classificacao' difere estruturalmente (matriz da planilha vs
-  // objeto calculado). Sem divergências funcionais, isso não é um erro.
-  if (base.standings_divergences.length === 0 && fields.includes('classificacao')) {
-    const structural = resolveCompareStatus(fields.filter((f) => f !== 'classificacao'));
-    base.compare_status = structural.status;
-  }
+  // Diferença estrutural sem divergência esportiva é WARNING, nunca MATCH.
+  base.compare_status = resolveSemanticCompareStatus(
+    fields,
+    base.standings_divergences.length > 0,
+  ).status;
   if (opts.compare) base.current = current;
 
   const canPersist = validation.valid && opts.persist === true && !opts.dryRun && !opts.compare;
