@@ -1,4 +1,3 @@
-import { useTournamentFinished } from '@/hooks/useTournamentFinished';
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -12,6 +11,7 @@ import {
   type Confronto,
 } from '@/hooks/useGoogleSheets';
 import CupMatchCard from './CupMatchCard';
+import TournamentPodium from './TournamentPodium';
 import MatchCard from './MatchCard';
 import { canCompareContinental, buildTeamIdMap, CONTINENTAL_ALLOWED_ROUNDS } from '@/utils/matchComparison';
 import { usePartialScores } from '@/hooks/usePartialScores';
@@ -59,7 +59,6 @@ interface LibertadoresViewProps {
 }
 
 const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
-  const { finished } = useTournamentFinished(slug);
   const navigate = useNavigate();
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
@@ -211,6 +210,31 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
   const findBadge = (name: string) =>
     badgeUrls[name] || badgeUrls[name.toUpperCase()] || badgeUrls[name.toLowerCase()] || badgeUrls[normalizeName(name)];
+
+  const automaticPodium = useMemo(() => {
+    if (fase !== 'Final' || !Array.isArray(knockoutData?.matches)) return null;
+    const parseScore = (value: unknown): number | null => {
+      if (value === null || value === undefined || String(value).trim() === '') return null;
+      const n = Number(String(value).replace(',', '.'));
+      return Number.isFinite(n) ? n : null;
+    };
+    const result = (match: any) => {
+      const score1 = parseScore(match?.scoreIda1);
+      const score2 = parseScore(match?.scoreIda2);
+      if (!match?.team1 || !match?.team2 || score1 === null || score2 === null || score1 === score2) return null;
+      return { winner: score1 > score2 ? String(match.team1) : String(match.team2), loser: score1 > score2 ? String(match.team2) : String(match.team1) };
+    };
+    const finalMatch = knockoutData.matches.find((m: any) => String(m.matchNumber ?? '').toUpperCase() === 'FINAL');
+    const thirdMatch = knockoutData.matches.find((m: any) => String(m.matchNumber ?? '').toUpperCase().includes('3') && String(m.matchNumber ?? '').toUpperCase().includes('LUGAR'));
+    const finalResult = result(finalMatch);
+    const thirdResult = result(thirdMatch);
+    if (!finalResult || !thirdResult) return null;
+    return {
+      champion: finalResult.winner,
+      runnerUp: finalResult.loser,
+      third: thirdResult.winner,
+    };
+  }, [fase, knockoutData]);
 
   const getPositionColor = (position: number, totalTeams: number, isBestThird = false) => {
     if (position >= 1 && position <= 2) return 'text-emerald-400';
@@ -482,36 +506,17 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           </p>
         )}
 
-        {/* Podium for Final */}
-        {finished && knockoutData.podium && knockoutData.podium.some(p => p.team) && (
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-yellow-500" />
-              <h3 className="text-sm font-bold text-foreground">Premiação</h3>
-            </div>
-            {knockoutData.podium.map((entry) => {
-              const isChamp = entry.position === 1;
-              return (
-                <div key={entry.position}
-                  className={`flex items-center gap-3 rounded-lg border p-3 ${isChamp ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-card border-border'}`}>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
-                    entry.position === 1 ? 'bg-yellow-500 text-yellow-950' :
-                    entry.position === 2 ? 'bg-gray-300 text-gray-800' : 'bg-amber-700 text-amber-100'
-                  }`}>
-                    {entry.position}º
-                  </div>
-                  {entry.badge && (
-                    <img src={entry.badge} alt={entry.team} className={`object-contain ${isChamp ? 'w-10 h-10' : 'w-8 h-8'}`}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  )}
-                  <span className={`font-semibold ${isChamp ? 'text-base text-foreground' : 'text-sm text-muted-foreground'}`}>
-                    {entry.team}
-                  </span>
-                  {isChamp && <Trophy className="w-4 h-4 text-yellow-500 ml-auto" />}
-                </div>
-              );
-            })}
-          </div>
+        {automaticPodium && (
+          <TournamentPodium
+            title="Premiação da Libertadores"
+            champion={automaticPodium.champion}
+            runnerUp={automaticPodium.runnerUp}
+            third={automaticPodium.third}
+            championBadge={findBadge(automaticPodium.champion)}
+            runnerUpBadge={findBadge(automaticPodium.runnerUp)}
+            thirdBadge={findBadge(automaticPodium.third)}
+            isUserTeam={isUserTeam}
+          />
         )}
       </div>
     );
