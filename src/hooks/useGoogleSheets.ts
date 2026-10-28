@@ -55,6 +55,10 @@ export interface ConfrontoCopa {
   scoreIda2: string;
   scoreVolta2: string;
   matchNumber: string;
+  /** Administrative resolution metadata; penalty scores are visual-only. */
+  manualWinner?: string | null;
+  manualPenaltyScore1?: number | null;
+  manualPenaltyScore2?: number | null;
   idCartola1?: string;
   idCartola2?: string;
   /** Identificador opcional de torneio (ver Confronto.league). */
