@@ -51,5 +51,16 @@ describe('preservação das escolhas manuais da Libertadores durante sincroniza�
     const progressed = resolveLibertadoresProgression(merged, { grupos: {} }) as any;
     expect(progressed['Quartas de Final'].matches[0].team1).toBe('Time B0');
     expect(progressed['Quartas de Final'].matches[0].team2).toBe('Time A1');
+
+    // Os placares de pênaltis são somente visuais: alterá-los não muda a classificação.
+    const alteredPenaltyScores = structuredClone(merged);
+    alteredPenaltyScores['Oitavas de Final'].matches[0].manualPenaltyScore1 = 5;
+    alteredPenaltyScores['Oitavas de Final'].matches[0].manualPenaltyScore2 = 2;
+    const progressedWithAlteredPenalties = resolveLibertadoresProgression(
+      alteredPenaltyScores,
+      { grupos: {} },
+    ) as any;
+    expect(progressedWithAlteredPenalties['Quartas de Final'].matches[0].team1).toBe('Time B0');
+    expect(progressedWithAlteredPenalties['Quartas de Final'].matches[0].team2).toBe('Time A1');
   });
 });
