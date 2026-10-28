@@ -230,6 +230,11 @@ const CupMatchCard = ({
       {renderTeamRow(match.team1, team1Empty, team1Badge, match.scoreIda1, match.scoreVolta1, total1, partialScore1, playedCount1, match.manualPenaltyScore1)}
       <div className="border-t border-primary/10 mx-4" />
       {renderTeamRow(match.team2, team2Empty, team2Badge, match.scoreIda2, match.scoreVolta2, total2, partialScore2, playedCount2, match.manualPenaltyScore2)}
+      {match.manualWinner && (
+        <div className="pt-1 text-center text-[10px] font-medium text-emerald-300">
+          Classificado nos pênaltis: {match.manualWinner}
+        </div>
+      )}
     </div>
   );
 };
