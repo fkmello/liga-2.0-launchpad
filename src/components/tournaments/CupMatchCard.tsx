@@ -121,14 +121,25 @@ const CupMatchCard = ({
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-foreground min-w-[1.25rem] text-center">
               {team1Empty ? '' : score1}
+              {match.manualWinner && match.manualPenaltyScore1 != null && (
+                <span className="ml-1 text-sm text-emerald-300">({match.manualPenaltyScore1})</span>
+              )}
             </span>
             <span className="text-sm text-muted-foreground font-medium">x</span>
             <span className="text-lg font-bold text-foreground min-w-[1.25rem] text-center">
               {team2Empty ? '' : score2}
+              {match.manualWinner && match.manualPenaltyScore2 != null && (
+                <span className="ml-1 text-sm text-emerald-300">({match.manualPenaltyScore2})</span>
+              )}
             </span>
           </div>
           {renderTeamBlock(match.team2, team2Empty, team2Badge, playedCount2, 'right')}
         </div>
+        {match.manualWinner && (
+          <div className="mt-2 text-center text-[10px] font-medium text-emerald-300">
+            Classificado nos pênaltis: {match.manualWinner}
+          </div>
+        )}
       </div>
     );
   }
@@ -151,6 +162,7 @@ const CupMatchCard = ({
     total: string,
     partial?: number,
     playedCount?: number,
+    penaltyScore?: number | null,
   ) => (
     <div className="flex items-center justify-center">
       <div className="w-32 shrink-0 min-w-0">
@@ -186,7 +198,10 @@ const CupMatchCard = ({
         </span>
       </div>
       <div className="w-16 shrink-0 text-center">
-        <span className="text-sm font-bold text-primary">{isEmpty ? '' : total}</span>
+        <span className="text-sm font-bold text-primary">
+          {isEmpty ? '' : total}
+          {match.manualWinner && penaltyScore != null && <span className="ml-1 text-emerald-300">({penaltyScore})</span>}
+        </span>
       </div>
     </div>
   );
@@ -212,9 +227,9 @@ const CupMatchCard = ({
           <span className="text-[10px] font-semibold text-muted-foreground">TOTAL</span>
         </div>
       </div>
-      {renderTeamRow(match.team1, team1Empty, team1Badge, match.scoreIda1, match.scoreVolta1, total1, partialScore1, playedCount1)}
+      {renderTeamRow(match.team1, team1Empty, team1Badge, match.scoreIda1, match.scoreVolta1, total1, partialScore1, playedCount1, match.manualPenaltyScore1)}
       <div className="border-t border-primary/10 mx-4" />
-      {renderTeamRow(match.team2, team2Empty, team2Badge, match.scoreIda2, match.scoreVolta2, total2, partialScore2, playedCount2)}
+      {renderTeamRow(match.team2, team2Empty, team2Badge, match.scoreIda2, match.scoreVolta2, total2, partialScore2, playedCount2, match.manualPenaltyScore2)}
     </div>
   );
 };
