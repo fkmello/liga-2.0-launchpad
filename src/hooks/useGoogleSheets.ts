@@ -317,10 +317,26 @@ export function useConfrontosLibertadores(fase: string) {
     queryFn: async () => {
       if (USE_CONSOLIDATED_LIBERTADORES) {
         const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
-        const phase = shadow?.fases?.[fase];
-        if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
-        console.warn(`[libertadores] fase shadow "${fase}" inválida; usando cache oficial`);
+
+        // Se o cache consolidado existe, uma fase ainda não gerada deve aparecer vazia.
+        // Não recorremos ao Google Sheets nesse caso, pois o ambiente local pode não
+        // ter GOOGLE_PRIVATE_KEY configurada. O fallback continua para cache ausente
+        // ou payload consolidado inválido.
+        if (shadow?.fases && typeof shadow.fases === 'object' && !Array.isArray(shadow.fases)) {
+          const phase = shadow.fases[fase];
+          if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
+
+          console.warn(`[libertadores] fase shadow "${fase}" ainda não disponível; exibindo fase vazia`);
+          return {
+            fase,
+            rodadaInfo: '',
+            matches: [],
+          };
+        }
+
+        console.warn('[libertadores] cache shadow ausente ou inválido; usando cache oficial');
       }
+
       return fetchWithFallback<ConfrontosCopaData>(
         'libertadores',
         { action: 'confrontos_libertadores', fase },

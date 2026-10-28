@@ -199,6 +199,171 @@ describe('pipeline validation indicators', () => {
     expect([...rows.keys()]).toEqual(['shadow/libertadores/2026']);
   });
 
+  it('persists the Libertadores semifinal matchups after quarterfinal winners are resolved', async () => {
+    const rows = new Map<string, any>();
+
+    const supabaseAdmin = {
+      from(table: string) {
+        if (table !== 'sheets_cache') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+
+        let selectedKey = '';
+
+        return {
+          select() {
+            return this;
+          },
+          eq(column: string, value: string) {
+            if (column !== 'cache_key') {
+              throw new Error(`Unexpected column: ${column}`);
+            }
+            selectedKey = value;
+            return this;
+          },
+          async maybeSingle() {
+            const row = rows.get(selectedKey);
+            return {
+              data: row ? { data: row.data } : null,
+              error: null,
+            };
+          },
+          async upsert(row: any) {
+            rows.set(row.cache_key, row);
+            return { error: null };
+          },
+        };
+      },
+    };
+
+    const phases: any = {
+      'Quartas de Final': {
+        matches: [
+          {
+            matchNumber: 'QF1',
+            team1: 'Time Azul',
+            team2: 'Time Verde',
+            scoreIda1: '1',
+            scoreIda2: '0',
+            scoreVolta1: '0',
+            scoreVolta2: '1',
+            manualWinner: 'Time Verde',
+            manualPenaltyScore1: '3',
+            manualPenaltyScore2: '4',
+          },
+          {
+            matchNumber: 'QF2',
+            team1: 'Time Amarelo',
+            team2: 'Time Roxo',
+            scoreIda1: '2',
+            scoreIda2: '0',
+            scoreVolta1: '1',
+            scoreVolta2: '1',
+          },
+          {
+            matchNumber: 'QF3',
+            team1: 'Time Branco',
+            team2: 'Time Preto',
+            scoreIda1: '0',
+            scoreIda2: '1',
+            scoreVolta1: '2',
+            scoreVolta2: '0',
+          },
+          {
+            matchNumber: 'QF4',
+            team1: 'Time Laranja',
+            team2: 'Time Rosa',
+            scoreIda1: '1',
+            scoreIda2: '1',
+            scoreVolta1: '0',
+            scoreVolta2: '2',
+          },
+        ],
+      },
+      Semifinal: {
+        matches: [
+          { matchNumber: 'SF1', team1: '', team2: '' },
+          { matchNumber: 'SF2', team1: '', team2: '' },
+        ],
+      },
+    };
+
+    const repo = createShadowRepository({
+      supabaseAdmin,
+      league: 'libertadores',
+      season: 2026,
+      legacyReader: async () => null,
+    });
+
+    const payload: any = {
+      version: 1,
+      synced_at: '2026-10-28T00:00:00.000Z',
+      fases: phases,
+      classificacao: {
+        grupos: {},
+        desempatesManuais: { grupos: {}, global: [] },
+      },
+      dados_externos: { rows: [] },
+      metadata: { hash: 'quarterfinals-test' },
+    };
+
+    await repo.save('libertadores', payload, {
+      type: 'libertadores',
+      syncedBy: null,
+    });
+
+    const loaded = await repo.load('libertadores');
+    expect(loaded).not.toBeNull();
+
+    const progressed = resolveLibertadoresProgression(
+      loaded!.fases as any,
+      loaded!.classificacao as any,
+    );
+
+    expect(
+      (progressed as any).Semifinal.matches.map(
+        (match: any) => [match.team1, match.team2],
+      ),
+    ).toEqual([
+      ['Time Verde', 'Time Amarelo'],
+      ['Time Branco', 'Time Rosa'],
+    ]);
+
+    await repo.save(
+      'libertadores',
+      {
+        ...loaded!,
+        fases: progressed,
+        metadata: {
+          ...loaded!.metadata!,
+          hash: 'semifinals-progressed-test',
+        },
+      },
+      { type: 'libertadores', syncedBy: null },
+    );
+
+    const reloaded = await repo.load('libertadores');
+    const semis = (reloaded!.fases as any).Semifinal.matches;
+
+    expect(semis).toHaveLength(2);
+    expect([semis[0].team1, semis[0].team2]).toEqual([
+      'Time Verde',
+      'Time Amarelo',
+    ]);
+    expect([semis[1].team1, semis[1].team2]).toEqual([
+      'Time Branco',
+      'Time Rosa',
+    ]);
+
+    const quarterfinals = (reloaded!.fases as any)['Quartas de Final'].matches;
+
+    expect(quarterfinals[0].manualWinner).toBe('Time Verde');
+    expect(quarterfinals[0].manualPenaltyScore1).toBe('3');
+    expect(quarterfinals[0].manualPenaltyScore2).toBe('4');
+
+    expect([...rows.keys()]).toEqual(['shadow/libertadores/2026']);
+  });
+
   it('reports structural classification differences as WARNING, not MATCH', () => {
     expect(resolveSemanticCompareStatus(['classificacao'], false).status).toBe('WARNING');
     expect(resolveSemanticCompareStatus([], false).status).toBe('MATCH');

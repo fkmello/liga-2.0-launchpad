@@ -302,6 +302,127 @@ describe('Libertadores adapter', () => {
     ).toBe(true);
   });
 
+  it('gera as semifinais quando os quatro confrontos das quartas têm vencedores', () => {
+    const makeMatches = (prefix: string, count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        team1: `${prefix}A${i}`,
+        team2: `${prefix}B${i}`,
+        scoreIda1: '80,00',
+        scoreIda2: '70,00',
+        scoreVolta1: '75,00',
+        scoreVolta2: '70,00',
+      }));
+
+    const fases: any = {
+      'Quartas de Final': {
+        matches: makeMatches('Q', 4),
+      },
+      Semifinal: {
+        matches: Array.from({ length: 2 }, () => ({
+          team1: '',
+          team2: '',
+          scoreIda1: '',
+          scoreIda2: '',
+          scoreVolta1: '',
+          scoreVolta2: '',
+        })),
+      },
+    };
+
+    const resultado = resolveLibertadoresProgression(fases, {
+      grupos: {},
+    });
+
+    expect(resultado.Semifinal.matches.map((m: any) => [
+      m.team1,
+      m.team2,
+    ])).toEqual([
+      ['QA0', 'QA1'],
+      ['QA2', 'QA3'],
+    ]);
+  });
+
+  it('gera semifinais com os vencedores reais do fixture local e preserva a decisão por pênaltis', () => {
+    const fases: any = {
+      'Quartas de Final': {
+        matches: [
+          {
+            team1: 'Time Azul',
+            team2: 'Time Verde',
+            scoreIda1: '1',
+            scoreIda2: '0',
+            scoreVolta1: '0',
+            scoreVolta2: '1',
+            manualWinner: 'Time Verde',
+            manualPenaltyScore1: 3,
+            manualPenaltyScore2: 4,
+          },
+          {
+            team1: 'Time Amarelo',
+            team2: 'Time Roxo',
+            scoreIda1: '2',
+            scoreIda2: '0',
+            scoreVolta1: '1',
+            scoreVolta2: '1',
+          },
+          {
+            team1: 'Time Branco',
+            team2: 'Time Preto',
+            scoreIda1: '0',
+            scoreIda2: '1',
+            scoreVolta1: '2',
+            scoreVolta2: '0',
+          },
+          {
+            team1: 'Time Laranja',
+            team2: 'Time Rosa',
+            scoreIda1: '1',
+            scoreIda2: '1',
+            scoreVolta1: '0',
+            scoreVolta2: '2',
+          },
+        ],
+      },
+      Semifinal: {
+        matches: [
+          {
+            team1: '',
+            team2: '',
+            scoreIda1: '',
+            scoreIda2: '',
+            scoreVolta1: '',
+            scoreVolta2: '',
+          },
+          {
+            team1: '',
+            team2: '',
+            scoreIda1: '',
+            scoreIda2: '',
+            scoreVolta1: '',
+            scoreVolta2: '',
+          },
+        ],
+      },
+    };
+
+    const resultado = resolveLibertadoresProgression(fases, {
+      grupos: {},
+    });
+
+    expect(
+      resultado.Semifinal.matches.map((m: any) => [m.team1, m.team2]),
+    ).toEqual([
+      ['Time Verde', 'Time Amarelo'],
+      ['Time Branco', 'Time Rosa'],
+    ]);
+
+    expect(resultado['Quartas de Final'].matches[0]).toMatchObject({
+      manualWinner: 'Time Verde',
+      manualPenaltyScore1: 3,
+      manualPenaltyScore2: 4,
+    });
+  });
+
   it('preserva os placares das quartas quando a decisão manual permite retomar a progressão', () => {
     const oitavas = Array.from({ length: 8 }, (_, i) => ({
       team1: `Time A${i}`,
