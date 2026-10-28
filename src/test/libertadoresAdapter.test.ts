@@ -233,6 +233,76 @@ describe('Libertadores adapter', () => {
     expect(result['Quartas de Final'].matches[0].team2).toBe('Time A1');
   });
 
+  it('aguarda a decisão manual do empate e avança assim que o vencedor é definido', () => {
+    const makeMatches = () =>
+      Array.from({ length: 8 }, (_, i) => ({
+        team1: `Time A${i}`,
+        team2: `Time B${i}`,
+        scoreIda1: '80,00',
+        scoreIda2: '70,00',
+        // A primeira partida empata no agregado: 150 a 150.
+        scoreVolta1: i === 0 ? '70,00' : '75,00',
+        scoreVolta2: i === 0 ? '80,00' : '70,00',
+      }));
+
+    const fases: any = {
+      'Oitavas de Final': { matches: makeMatches() },
+      'Quartas de Final': {
+        matches: Array.from({ length: 4 }, () => ({
+          team1: '',
+          team2: '',
+        })),
+      },
+      Semifinal: {
+        matches: Array.from({ length: 2 }, () => ({
+          team1: '',
+          team2: '',
+        })),
+      },
+    };
+
+    // Sem decisão manual, as quartas não devem avançar.
+    const aguardando = resolveLibertadoresProgression(fases, {
+      grupos: {},
+    });
+
+    expect(
+      aguardando['Quartas de Final'].matches.every(
+        (match: any) => !match.team1 && !match.team2,
+      ),
+    ).toBe(true);
+
+    // Simula a escolha manual do vencedor da partida empatada.
+    const fasesResolvidas = {
+      ...fases,
+      'Oitavas de Final': {
+        matches: fases['Oitavas de Final'].matches.map(
+          (match: any, index: number) =>
+            index === 0
+              ? { ...match, manualWinner: 'Time B0' }
+              : match,
+        ),
+      },
+    };
+
+    const resultado = resolveLibertadoresProgression(fasesResolvidas, {
+      grupos: {},
+    });
+
+    // A progressão deve continuar com o vencedor escolhido manualmente.
+    expect(resultado['Quartas de Final'].matches[0]).toMatchObject({
+      team1: 'Time B0',
+      team2: 'Time A1',
+    });
+
+    expect(
+      resultado['Quartas de Final'].matches.every(
+        (match: any) => match.team1 && match.team2,
+      ),
+    ).toBe(true);
+  });
+
+
   it('gera oitavas após aplicar ordens manuais para empates de grupo e da classificação geral', () => {
     const grupos: Record<string, unknown[]> = {};
     const groupMatches: any[] = [];
