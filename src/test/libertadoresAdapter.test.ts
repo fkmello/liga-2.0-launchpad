@@ -302,6 +302,87 @@ describe('Libertadores adapter', () => {
     ).toBe(true);
   });
 
+  it('preserva os placares das quartas quando a decisão manual permite retomar a progressão', () => {
+    const oitavas = Array.from({ length: 8 }, (_, i) => ({
+      team1: `Time A${i}`,
+      team2: `Time B${i}`,
+      scoreIda1: '80,00',
+      scoreIda2: '70,00',
+      scoreVolta1: i === 0 ? '70,00' : '75,00',
+      scoreVolta2: i === 0 ? '80,00' : '70,00',
+    }));
+
+    const fases: any = {
+      'Oitavas de Final': { matches: oitavas },
+      'Quartas de Final': {
+        matches: [
+          {
+            team1: 'Time B0',
+            team2: 'Time A1',
+            scoreIda1: '90,00',
+            scoreIda2: '80,00',
+            scoreVolta1: '85,00',
+            scoreVolta2: '75,00',
+          },
+          { team1: 'Time A2', team2: 'Time A3', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+          { team1: 'Time A4', team2: 'Time A5', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+          { team1: 'Time A6', team2: 'Time A7', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+        ],
+      },
+      Semifinal: {
+        matches: Array.from({ length: 2 }, () => ({
+          team1: '',
+          team2: '',
+          scoreIda1: '',
+          scoreIda2: '',
+          scoreVolta1: '',
+          scoreVolta2: '',
+        })),
+      },
+    };
+
+    // Enquanto a primeira oitava estiver empatada sem decisão manual,
+    // a fase seguinte não deve ser recalculada.
+    const aguardando = resolveLibertadoresProgression(fases, {
+      grupos: {},
+    });
+
+    expect(aguardando['Quartas de Final'].matches[0]).toMatchObject({
+      team1: 'Time B0',
+      team2: 'Time A1',
+      scoreIda1: '90,00',
+      scoreIda2: '80,00',
+      scoreVolta1: '85,00',
+      scoreVolta2: '75,00',
+    });
+
+    // A decisão manual resolve o empate e permite recalcular as quartas.
+    const fasesResolvidas = {
+      ...fases,
+      'Oitavas de Final': {
+        matches: oitavas.map((match, index) =>
+          index === 0
+            ? { ...match, manualWinner: 'Time B0' }
+            : match,
+        ),
+      },
+    };
+
+    const resultado = resolveLibertadoresProgression(fasesResolvidas, {
+      grupos: {},
+    });
+
+    expect(resultado['Quartas de Final'].matches[0]).toMatchObject({
+      team1: 'Time B0',
+      team2: 'Time A1',
+      scoreIda1: '90,00',
+      scoreIda2: '80,00',
+      scoreVolta1: '85,00',
+      scoreVolta2: '75,00',
+    });
+
+    expect(resultado['Quartas de Final'].matches).toHaveLength(4);
+  });
 
   it('gera oitavas após aplicar ordens manuais para empates de grupo e da classificação geral', () => {
     const grupos: Record<string, unknown[]> = {};
