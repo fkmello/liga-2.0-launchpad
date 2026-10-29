@@ -220,7 +220,7 @@ async function parseCopaBaseDados(accessToken: string, spreadsheetId: string) {
       if (!row?.some((cell) => String(cell ?? '').trim() !== '')) continue;
       const first = String(row[0] ?? '').trim();
       const second = String(row[1] ?? '').trim();
-      const id = /^\\d{3,}$/.test(second) ? second : /^\\d{3,}$/.test(first) ? first : '';
+      const id = /^\d{3,}$/.test(second) ? second : /^\d{3,}$/.test(first) ? first : '';
       const key = id ? `id:${id}` : `name:${first.toLowerCase()}`;
       merged.set(key, [row[0] ?? '', row[1] ?? '', row[2] ?? '', role]);
     }
