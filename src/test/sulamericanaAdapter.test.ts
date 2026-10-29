@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSulamericanaProgression } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-sulamericana';
 import { resolveLibertadoresBestThirds } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
+import { readLegacyTournament } from '../../supabase/functions/_shared/cache/legacy/reader';
 
 function standing(team: string, points: number, wins: number, goalDiff: number, goalsFor: number) {
   return ['', '', team, String(points), '6', String(wins), '0', '0', String(goalsFor), String(goalDiff)];
@@ -281,6 +282,82 @@ describe('Sul-Americana progression', () => {
     }
     const best = resolveLibertadoresBestThirds({ grupos });
     expect(best?.map((team) => team.team)).toEqual(['Lib Terceiro 0', 'Lib Terceiro 1']);
+  });
+
+
+  it('integra o formato legado real com a classificação persistida da Libertadores', async () => {
+    const legacyRows = (prefix: string) => Array.from({ length: 8 }, (_, i) => ({
+      name: `GRUPO ${String.fromCharCode(65 + i)}`,
+      rows: [
+        ['1', '', `${prefix} Primeiro ${i}`, '40', '6', '5', '0', '1', '30,00'],
+        ['2', '', `${prefix} Segundo ${i}`, '25', '6', '4', '0', '2', '20,00'],
+        ['3', '', `${prefix} Terceiro ${i}`, String(15 - i), '6', String(3 - (i % 2)), '0', '3', String(10 - i) + ',00'],
+        ['4', '', `${prefix} Quarto ${i}`, '1', '6', '0', '0', '6', '-20,00'],
+      ],
+    }));
+
+    const legacyLibertadores = {
+      version: 1,
+      synced_at: '2026-10-27T11:18:40Z',
+      fases: {},
+      grupos: {},
+      classificacao: { groups: legacyRows('Lib') },
+      dados_externos: { rows: [['Time', 'id'], ['Lib Externo', '1001']] },
+    };
+    const legacySulamericana = {
+      version: 1,
+      synced_at: '2026-10-27T11:18:40Z',
+      fases: {
+        'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({ matchNumber: String(i + 1), team1: '', team2: '' })) },
+        'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
+        Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: '', team2: '' })) },
+        Final: { matches: [{ matchNumber: 'FINAL', team1: '', team2: '' }, { matchNumber: '3º LUGAR', team1: '', team2: '' }] },
+      },
+      grupos: Object.fromEntries(Array.from({ length: 6 }, (_, roundIndex) => [
+        `rodada_${roundIndex + 1}`,
+        { groups: Array.from({ length: 7 }, (_, groupIndex) => ({
+          name: `GRUPO ${String.fromCharCode(65 + groupIndex)}`,
+          matches: [{ team1: `Sula ${groupIndex} A`, team2: `Sula ${groupIndex} B`, score1: '80,00', score2: '70,00' }],
+        })) },
+      ])),
+      classificacao: { groups: Array.from({ length: 7 }, (_, i) => ({
+        name: `GRUPO ${String.fromCharCode(65 + i)}`,
+        rows: [
+          ['', '', `Sula Primeiro ${i}`, String(40 - i), '6', '5', '0', '1', String(30 - i) + ',00'],
+          ['', '', `Sula Segundo ${i}`, String(25 - i), '6', '4', '0', '2', String(20 - i) + ',00'],
+          ['', '', `Sula Terceiro ${i}`, String(10 - i), '6', '2', '0', '4', String(5 - i) + ',00'],
+          ['', '', `Sula Quarto ${i}`, '1', '6', '0', '0', '6', '-20,00'],
+        ],
+      })) },
+      dados_externos: { rows: [['Time', 'id'], ['Sula Externo', '2001']] },
+    };
+
+    const readLegacy = async (key: string) => {
+      if (key === 'libertadores') return legacyLibertadores;
+      if (key === 'sulamericana') return legacySulamericana;
+      return null;
+    };
+    const libPayload = await readLegacyTournament('libertadores', 2026, readLegacy);
+    const sulaPayload = await readLegacyTournament('sulamericana', 2026, readLegacy);
+    expect(libPayload?.classificacao.grupos['GRUPO A']).toHaveLength(4);
+    expect(sulaPayload?.classificacao.grupos).toHaveProperty('GRUPO G');
+    expect(sulaPayload?.fases['Fase de Grupos']).toBeDefined();
+
+    const bestThirds = resolveLibertadoresBestThirds(libPayload!.classificacao);
+    expect(bestThirds?.map((team) => team.team)).toEqual(['Lib Terceiro 0', 'Lib Terceiro 1']);
+
+    const result = resolveSulamericanaProgression(
+      sulaPayload!.fases,
+      sulaPayload!.classificacao,
+      bestThirds ?? [],
+    );
+    const roundOf16 = result['Oitavas de Final'].matches;
+    const teams = roundOf16.flatMap((match: any) => [match.team1, match.team2]);
+    expect(roundOf16).toHaveLength(8);
+    expect(new Set(teams).size).toBe(16);
+    expect(teams).toContain('Lib Terceiro 0');
+    expect(teams).toContain('Lib Terceiro 1');
+    expect(teams.some((team: string) => team.includes('Lib Quarto'))).toBe(false);
   });
 
 });
