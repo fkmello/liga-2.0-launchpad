@@ -55,12 +55,12 @@ function externalRows(ctx: AdapterContext): unknown[] {
 function rowName(row: any): string {
   const value = Array.isArray(row) ? row[0] : row?.nome ?? row?.team_name ?? row?.time;
   const name = String(value ?? '').trim();
-  return /^\\d+$/.test(name) ? '' : name;
+  return /^\d+$/.test(name) ? '' : name;
 }
 
 function rowId(row: any): string {
   const value = Array.isArray(row)
-    ? (row[1] && /^\\d+$/.test(String(row[1]).trim()) ? row[1] : row.find((cell: unknown) => /^\\d{3,}$/.test(String(cell ?? '').trim())))
+    ? (row[1] && /^\d+$/.test(String(row[1]).trim()) ? row[1] : row.find((cell: unknown) => /^\d{3,}$/.test(String(cell ?? '').trim())))
     : row?.id_cartola ?? row?.id;
   return value === null || value === undefined ? '' : String(value).trim();
 }
