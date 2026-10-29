@@ -100,6 +100,24 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
     return mapping;
   }, [dadosExternos]);
 
+  const badgeFallbackUrls = useMemo(() => {
+    if (!dadosExternos?.rows) return {};
+    const mapping: Record<string, string> = {};
+    const normalizeName = (n: string) =>
+      n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    for (const row of dadosExternos.rows) {
+      const name = row[0]?.trim();
+      const url = row[4]?.trim();
+      if (name && url && url.startsWith('http')) {
+        mapping[name] = url;
+        mapping[name.toUpperCase()] = url;
+        mapping[name.toLowerCase()] = url;
+        mapping[normalizeName(name)] = url;
+      }
+    }
+    return mapping;
+  }, [dadosExternos]);
+
   const teamNameToId = useMemo(() => {
     if (!dadosExternos?.rows) return new Map<string, string>();
     return buildTeamIdMap(dadosExternos.rows);
@@ -125,8 +143,8 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
     if (!activeLeg || !data?.matches) return '';
     const seen = new Set<string>();
     for (const m of data.matches) {
-      const id1 = teamNameToId.get(m.team1?.toUpperCase());
-      const id2 = teamNameToId.get(m.team2?.toUpperCase());
+      const id1 = m.team1Id ?? m.idCartola1 ?? teamNameToId.get(m.team1?.toUpperCase());
+      const id2 = m.team2Id ?? m.idCartola2 ?? teamNameToId.get(m.team2?.toUpperCase());
       if (id1) seen.add(id1);
       if (id2) seen.add(id2);
     }
@@ -298,6 +316,7 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
                   <CupMatchCard
                     match={match}
                     badgeUrls={badgeUrls}
+                    badgeFallbackUrls={badgeFallbackUrls}
                     isFinal={data?.isFinal}
                     isUserTeam={isUserTeam}
                     disabled={!isEnabled}
@@ -352,7 +371,11 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
                     </div>
                     {entry.badge && (
                       <img src={entry.badge} alt={entry.team} className={`object-contain ${isChamp ? 'w-10 h-10' : 'w-8 h-8'}`}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        onError={(e) => {
+                          const image = e.currentTarget;
+                          if (entry.badgeFallback && image.src !== entry.badgeFallback) image.src = entry.badgeFallback;
+                          else image.style.display = 'none';
+                        }} />
                     )}
                     <span className={`font-semibold ${isChamp ? 'text-base text-foreground' : 'text-sm text-muted-foreground'}`}>
                       {entry.team}
