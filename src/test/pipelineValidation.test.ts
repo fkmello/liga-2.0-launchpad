@@ -1,4 +1,13 @@
 import { describe, expect, it } from 'vitest';
+
+function completedRoundOf16ForQuarterfinals(quarterfinals: any[]) {
+  return {
+    matches: quarterfinals.flatMap((match: any) => [
+      { team1: match.team1, team2: `Eliminado ${match.team1}`, scoreIda1: '1', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0' },
+      { team1: match.team2, team2: `Eliminado ${match.team2}`, scoreIda1: '1', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0' },
+    ]),
+  };
+}
 import { resolveSemanticCompareStatus } from '../../supabase/functions/_shared/cache/compareStatus';
 import { buildCoverageReport } from '../../supabase/functions/_shared/sync/validation/coverage';
 import { diffLibertadoresClassification } from '../../supabase/functions/_shared/sync/validation/standingsDiff';
@@ -287,6 +296,8 @@ describe('pipeline validation indicators', () => {
         ],
       },
     };
+
+    phases['Oitavas de Final'] = completedRoundOf16ForQuarterfinals(phases['Quartas de Final'].matches);
 
     const repo = createShadowRepository({
       supabaseAdmin,
