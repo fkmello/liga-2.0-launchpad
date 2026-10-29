@@ -21,7 +21,7 @@ import { canCompareContinental, buildTeamIdMap, CONTINENTAL_ALLOWED_ROUNDS } fro
 import { usePartialScores } from '@/hooks/usePartialScores';
 import { useUserTeamIds, buildIsUserTeamById } from '@/hooks/useUserTeamIds';
 import { useUserTeamNames } from '@/hooks/useUserTeamNames';
-import { resolveLibertadoresFinalResult } from '@/utils/libertadoresResults';
+import { resolveLibertadoresPodium } from '@/utils/libertadoresResults';
 import { isUnresolvedLibertadoresKnockoutTie } from '@/utils/libertadoresKnockoutTie';
 import { applyManualLibertadoresWinner } from '@/utils/applyManualLibertadoresWinner';
 
@@ -262,23 +262,15 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   );
 
   const automaticPodium = useMemo(() => {
-    if (!isFinal || !Array.isArray(knockoutData?.matches)) return null;
-    const normalizeLabel = (value: unknown) => String(value ?? '').toUpperCase();
-    const finalMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber) === 'FINAL') as any;
-    const thirdMatch = knockoutData.matches.find(match => normalizeLabel(match.matchNumber).includes('3') &&
-      normalizeLabel(match.matchNumber).includes('LUGAR')) as any;
-    const winnerOf = resolveLibertadoresFinalResult;
-    const finalResult = winnerOf(finalMatch);
-    const thirdResult = winnerOf(thirdMatch);
-    if (!finalResult || !thirdResult) return null;
+    if (!isFinal) return null;
+    const podium = resolveLibertadoresPodium(knockoutData?.matches);
+    if (!podium) return null;
     const badgeFor = (team: string) => badgeUrls[team] || badgeUrls[team.toUpperCase()] || badgeUrls[normalizeName(team)] || '';
     return {
-      champion: finalResult.winner,
-      championBadge: badgeFor(finalResult.winner),
-      runnerUp: finalResult.loser,
-      runnerUpBadge: badgeFor(finalResult.loser),
-      third: thirdResult.winner,
-      thirdBadge: badgeFor(thirdResult.winner),
+      ...podium,
+      championBadge: badgeFor(podium.champion),
+      runnerUpBadge: badgeFor(podium.runnerUp),
+      thirdBadge: badgeFor(podium.third),
     };
   }, [isFinal, knockoutData, badgeUrls]);
 
