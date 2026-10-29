@@ -631,7 +631,7 @@ export const cartolaSulamericanaAdapter: TournamentAdapter<LibertadoresRaw> = {
     // A função não altera a fase Final enquanto os agregados não puderem ser determinados.
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
     const updatedClassification = resolveLibertadoresClassification(updatedFases, targetRound, previousClassification);
-    const progressedFases = resolveSulamericanaProgression(updatedFases, updatedClassification, ctx.relatedPayloads?.libertadores?.classificacao?.melhoresTerceiros);
+    const progressedFases = resolveSulamericanaProgression(updatedFases, updatedClassification, ctx.relatedPayloads?.libertadores?.classificacao?.melhoresTerceiros as Array<{ team: string; points: number; wins: number; goalDiff: number; goalsFor: number }> | undefined);
 
     return { fases: progressedFases, classificacao: updatedClassification, teams };
   },
