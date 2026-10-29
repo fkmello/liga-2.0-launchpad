@@ -365,15 +365,17 @@ export function useConfrontosSulamericanaGrupos(rodada: number) {
 export function useDadosExternosSulamericana() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-sulamericana'],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'sulamericana',
-      { action: 'dados_externos_sulamericana' },
-      (d) => d?.dados_externos
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        const rows = shadow?.dados_externos?.rows;
+        if (Array.isArray(rows) && rows.length) return { headers: [], rows, raw: rows };
+      }
+      return fetchWithFallback<DadosExternosData>('sulamericana', { action: 'dados_externos_sulamericana' }, (d) => d?.dados_externos);
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
-
 export function useClassificacaoSulamericana() {
   return useQuery<LibertadoresGroupData>({
     queryKey: ['classificacao-sulamericana'],
