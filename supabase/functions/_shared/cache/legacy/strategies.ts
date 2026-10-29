@@ -143,4 +143,5 @@ export const LEGACY_STRATEGIES: Record<string, LegacyStrategy> = {
   brasileirao_serie_c: multiKeyLeagueStrategy({ legacyLeague: 'serie_c', maxRodada: 38 }),
   champions: singleKeyStrategy(() => 'campeoes'),
   libertadores: continentalSingleKeyStrategy('libertadores'),
+  sulamericana: continentalSingleKeyStrategy('sulamericana'),
 };
