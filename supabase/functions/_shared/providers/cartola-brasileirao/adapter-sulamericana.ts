@@ -173,6 +173,11 @@ function formatStandingScore(value: number): string {
  * Os dois primeiros e os terceiros colocados são ordenados pela mesma regra usada na tela:
  * pontos, vitórias e saldo de pontos Cartola.
  */
+function isAuxiliaryGroup(groupName: unknown): boolean {
+  const normalized = String(groupName ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return normalized === 'H' || normalized === 'GRUPOH';
+}
+
 export function recalculateLibertadoresClassification(
   fases: ContinentalFases,
   previousClassification: { grupos: Record<string, unknown[]> },
@@ -182,6 +187,7 @@ export function recalculateLibertadoresClassification(
   // Preserve group/team identities from the existing table, including teams whose matches
   // have not yet received scores in the available rounds.
   for (const [groupName, rows] of Object.entries(previousClassification?.grupos ?? {})) {
+    if (isAuxiliaryGroup(groupName)) continue;
     const standings = new Map<string, GroupStanding>();
     for (const row of rows as any[]) {
       const team = String(Array.isArray(row) ? row[2] ?? '' : '').trim();
@@ -206,6 +212,7 @@ export function recalculateLibertadoresClassification(
     if (!Array.isArray(roundData?.groups)) continue;
     for (const group of roundData.groups as any[]) {
       const groupName = String(group?.name ?? '').trim() || 'Grupo';
+      if (isAuxiliaryGroup(groupName)) continue;
       let standings = groupMatches.get(groupName);
       if (!standings) {
         standings = new Map<string, GroupStanding>();
@@ -362,6 +369,7 @@ function allGroupMatchesComplete(fases: ContinentalFases): boolean {
     const groups = stage[`rodada_${round}`]?.groups;
     if (!Array.isArray(groups) || groups.length === 0) return false;
     for (const group of groups) {
+      if (isAuxiliaryGroup(group?.name)) continue;
       if (!Array.isArray(group?.matches) || group.matches.length === 0) return false;
       if (group.matches.some((match: any) =>
         parseFantasyScore(match?.score1) === null || parseFantasyScore(match?.score2) === null
@@ -374,6 +382,7 @@ function allGroupMatchesComplete(fases: ContinentalFases): boolean {
 export function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>; desempatesManuais?: { grupos?: Record<string, string[]>; global?: string[] } }, expectedCount = 16): StandingRow[] | null {
   const qualified: StandingRow[] = [];
   for (const [group, rows] of Object.entries(classification?.grupos ?? {})) {
+    if (isAuxiliaryGroup(group)) continue;
     const manualOrder = classification.desempatesManuais?.grupos?.[group] ?? [];
     const manualRank = new Map(manualOrder.map((team, index) => [team, index]));
     const compareRows = (a: unknown[], b: unknown[]) =>
