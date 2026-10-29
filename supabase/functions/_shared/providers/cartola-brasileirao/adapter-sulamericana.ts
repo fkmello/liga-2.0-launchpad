@@ -566,9 +566,10 @@ export function resolveSulamericanaProgression(
     const expected = source === 'Oitavas de Final' ? 8 : 4;
     if (!Array.isArray(sourceMatches) || sourceMatches.length !== expected ||
         !Array.isArray(targetPhase?.matches)) continue;
-    // Advance each pair independently: a completed pair must not wait for
-    // unrelated matches in the same phase to finish.
+    // Keep the bracket synchronized: the entire phase advances only when every
+    // confrontation has a winner, including any manual resolution of aggregate ties.
     const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
+    if (winners.some((winner: any) => !winner)) continue;
     const matches = targetPhase.matches.map((match: ContinentalMatch, index: number) => {
       const first = winners[index * 2];
       const second = winners[index * 2 + 1];
