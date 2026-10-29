@@ -188,8 +188,8 @@ describe('Sul-Americana progression', () => {
         };
       }) },
       'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({
-        team1: ['Semi A', 'Semi C', 'QF A2', 'QF A3'][i],
-        team2: ['Semi B', 'Semi D', 'QF B2', 'QF B3'][i],
+        team1: ['Semi A', 'Semi B', 'Semi C', 'Semi D'][i],
+        team2: ['QF B0', 'QF B1', 'QF B2', 'QF B3'][i],
         scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
       })) },
       Semifinal: { matches: [
