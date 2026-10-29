@@ -209,11 +209,19 @@ async function parseCopaBaseDados(accessToken: string, spreadsheetId: string) {
   const headerRow = preValues[0] || fase2Values[0] || [];
   const preRows = preValues.length > 1 ? preValues.slice(1) : [];
   const fase2Rows = fase2Values.length > 1 ? fase2Values.slice(1) : [];
-  const merged = new Map<string, string[]>();
-  for (const row of preRows) if (row[0]) merged.set(row[0].trim().toLowerCase(), row);
-  for (const row of fase2Rows) if (row[0]) merged.set(row[0].trim().toLowerCase(), row);
-  const values = [headerRow, ...merged.values()];
-  return { headers: values.length > 0 ? values[0] : [], rows: values.length > 1 ? values.slice(1) : [], raw: values };
+
+  // Preserve the source tab as metadata: the app needs to distinguish the 56
+  // preliminary entrants from the four teams invited directly to phase two.
+  // Keep the existing tab names for the current season; only the row payload gains
+  // a fourth internal column used by the API adapter.
+  const rows = [
+    ...preRows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
+      .map((row) => [...row, "preliminar"]),
+    ...fase2Rows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
+      .map((row) => [...row, "convidado"]),
+  ];
+  const headers = [...headerRow, "origem_interna"];
+  return { headers, rows, raw: [headers, ...rows] };
 }
 
 // Libertadores / Sulamericana classificacao
