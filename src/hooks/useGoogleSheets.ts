@@ -379,15 +379,22 @@ export function useDadosExternosSulamericana() {
 export function useClassificacaoSulamericana() {
   return useQuery<LibertadoresGroupData>({
     queryKey: ['classificacao-sulamericana'],
-    queryFn: () => fetchWithFallback<LibertadoresGroupData>(
-      'sulamericana',
-      { action: 'classificacao_sulamericana' },
-      (d) => d?.classificacao
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        const standings = shadow?.classificacao?.grupos;
+        if (standings && typeof standings === 'object' && Object.keys(standings).length) {
+          return { groups: Object.entries(standings).map(([name, rows]) => ({
+            name, headers: ['', name, '', 'P', 'J', 'V', 'E', 'D', 'PF', 'SG'],
+            rows: Array.isArray(rows) ? rows.map((row: any) => Array.isArray(row) && row.length === 9 ? [...row.slice(0, 8), '', row[8]] : row) : [],
+          })) };
+        }
+      }
+      return fetchWithFallback<LibertadoresGroupData>('sulamericana', { action: 'classificacao_sulamericana' }, (d) => d?.classificacao);
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
-
 export function useConfrontosSulamericana(fase: string) {
   return useQuery<ConfrontosCopaData>({
     queryKey: ['confrontos-sulamericana', fase],
