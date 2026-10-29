@@ -54,11 +54,11 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: LIBERTADORES_SYNCABLE_TARGET_ROUNDS },
   },
   sulamericana: {
-    league: 'sulamericana', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
+    league: 'sulamericana', currentSeason: 2026, activeSync: 'api', persistMode: 'official',
     cacheKey: (season) => `sulamericana:${season}`, cacheType: 'sulamericana', version: 1, schema_version: 1,
     standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaSulamericanaAdapter],
     adapterPrecedence: { cartola_brasileirao_sulamericana_v1: 10 },
-    // Automatic API refresh enabled in shadow mode only; official cache remains untouched.
+    // Official writes require an authenticated admin with shadow=false; machine/cron calls remain in shadow mode.
     cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: SULAMERICANA_SYNCABLE_TARGET_ROUNDS },
   },
   brasileirao_serie_b: {
