@@ -465,7 +465,7 @@ describe('Libertadores adapter', () => {
     expect(aguardando.Final.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
 
     const fasesResolvidas = {
-      ...fases,
+      ...aguardando,
       'Oitavas de Final': {
         matches: oitavas.map((match, index) => index === 0 ? { ...match, manualWinner: 'Time B0' } : match),
       },
