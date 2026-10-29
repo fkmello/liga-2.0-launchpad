@@ -656,6 +656,16 @@ export function resolveSulamericanaProgression(
         return match;
       });
       next = { ...next, Final: { ...final, matches } };
+    } else {
+      // Never leave stale final/third-place teams or scores when a semifinal is
+      // incomplete or tied without an explicit manual winner.
+      const matches = final.matches.map((match: ContinentalMatch) => {
+        const cleared: ContinentalMatch = { ...match, team1: '', team2: '' };
+        for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) cleared[field] = '';
+        delete cleared.manualWinner;
+        return cleared;
+      });
+      next = { ...next, Final: { ...final, matches } };
     }
   }
   return next;
