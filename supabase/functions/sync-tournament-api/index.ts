@@ -146,14 +146,37 @@ Deno.serve(async (req) => {
 
     const key = shadowKey(baseDef.league, resolvedSeason);
     const def = shadow ? { ...baseDef, cacheKey: () => key } : baseDef;
-    const repo = shadow
+    const legacyReader = createSupabaseLegacyReader(supabaseAdmin);
+    const repoBase = shadow
       ? createShadowRepository({
           supabaseAdmin,
           league: baseDef.league,
           season: resolvedSeason,
-          legacyReader: createSupabaseLegacyReader(supabaseAdmin),
+          legacyReader,
         })
       : createSheetsCacheRepository(supabaseAdmin);
+
+    // When first promoting Sul-Americana to official storage, seed the pipeline's
+    // previous payload from its validated shadow cache if no official cache exists.
+    // Saving still goes only through the official repository and its normal validation.
+    const sulamericanaShadowBaseline = !shadow && baseDef.league === 'sulamericana'
+      ? createShadowRepository({
+          supabaseAdmin,
+          league: baseDef.league,
+          season: resolvedSeason,
+          legacyReader,
+        })
+      : null;
+    const repo = sulamericanaShadowBaseline
+      ? {
+          ...repoBase,
+          async load(cacheKey: string) {
+            const officialPayload = await repoBase.load(cacheKey);
+            if (officialPayload) return officialPayload;
+            return await sulamericanaShadowBaseline.load(shadowKey(baseDef.league, resolvedSeason));
+          },
+        }
+      : repoBase;
 
     // Sul-Americana reads the Libertadores shadow payload read-only to import
     // its two best third-place qualifiers. No cross-tournament write is performed.
