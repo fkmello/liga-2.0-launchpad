@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSulamericanaProgression } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-sulamericana';
+import { resolveLibertadoresBestThirds } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-libertadores';
 
 function standing(team: string, points: number, wins: number, goalDiff: number, goalsFor: number) {
   return ['', '', team, String(points), '6', String(wins), '0', '0', String(goalsFor), String(goalDiff)];
@@ -265,6 +266,21 @@ describe('Sul-Americana progression', () => {
     expect(roundOf16.some((match: any) => String(match.team1 + match.team2).includes('Terceiro Libertadores Auxiliar'))).toBe(false);
     expect(roundOf16.flatMap((match: any) => [match.team1, match.team2])).toContain('Libertadores Third 1');
     expect(roundOf16.flatMap((match: any) => [match.team1, match.team2])).toContain('Libertadores Third 2');
+  });
+
+
+  it('derives the two Libertadores third-place qualifiers from persisted standings rows', () => {
+    const grupos: Record<string, unknown[]> = {};
+    for (let i = 0; i < 8; i++) {
+      grupos[`GRUPO ${String.fromCharCode(65 + i)}`] = [
+        standing(`Lib Primeiro ${i}`, 40, 6, 20, 100),
+        standing(`Lib Segundo ${i}`, 25, 4, 8, 70),
+        standing(`Lib Terceiro ${i}`, 15 - i, 3, 5 - i, 50 - i),
+        standing(`Lib Quarto ${i}`, 1, 0, -20, 10),
+      ];
+    }
+    const best = resolveLibertadoresBestThirds({ grupos });
+    expect(best?.map((team) => team.team)).toEqual(['Lib Terceiro 0', 'Lib Terceiro 1']);
   });
 
 });
