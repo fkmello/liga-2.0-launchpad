@@ -20,6 +20,12 @@ export interface AdapterContext {
     classificacao: { grupos: Record<string, unknown[]>; [key: string]: unknown };
     dados_externos: { rows: unknown[] };
   } | null;
+  /** Read-only payloads from related tournaments needed for cross-competition qualification. */
+  relatedPayloads?: Record<string, {
+    fases: Record<string, unknown>;
+    classificacao: { grupos: Record<string, unknown[]>; [key: string]: unknown };
+    dados_externos: { rows: unknown[] };
+  } | null>;
 }
 
 export interface TournamentAdapter<Raw = unknown> {
