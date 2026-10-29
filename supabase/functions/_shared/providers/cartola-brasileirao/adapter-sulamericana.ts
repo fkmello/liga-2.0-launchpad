@@ -174,7 +174,7 @@ function formatStandingScore(value: number): string {
  * pontos, vitórias e saldo de pontos Cartola.
  */
 function isAuxiliaryGroup(groupName: unknown): boolean {
-  const normalized = String(groupName ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const normalized = String(groupName ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   return normalized === 'H' || normalized === 'GRUPOH';
 }
 
