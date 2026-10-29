@@ -59,7 +59,7 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaSulamericanaAdapter],
     adapterPrecedence: { cartola_brasileirao_sulamericana_v1: 10 },
     // Official writes require an authenticated admin with shadow=false; machine/cron calls remain in shadow mode.
-    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: SULAMERICANA_SYNCABLE_TARGET_ROUNDS },
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: SULAMERICANA_SYNCABLE_TARGET_ROUNDS, allowOfficialPersistence: true },
   },
   brasileirao_serie_b: {
     league: 'brasileirao_serie_b', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',
