@@ -56,6 +56,8 @@ export interface TournamentCronConfig {
   secondSyncDelayMinutes?: number;
   /** Rodadas-alvo da API Cartola aceitas pelo adaptador; ausente = todas (ex.: Brasileirão). */
   syncableTargetRounds?: number[];
+  /** Allows this tournament's trusted cron secret to write official cache. */
+  allowOfficialPersistence?: boolean;
 }
 
 export interface TournamentDefinition {
