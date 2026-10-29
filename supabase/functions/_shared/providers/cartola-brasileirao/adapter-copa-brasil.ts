@@ -213,6 +213,90 @@ function replaceCopaMatchTeams(match: CupMatch, team1: CopaEntrant, team2: CopaE
 }
 
 /**
+ * Fluxo mínimo da temporada 2026: mantém os confrontos da planilha e só
+ * alimenta Final/3º lugar após a volta das duas semifinais. Não sorteia fases
+ * anteriores nem substitui a chave fixa já existente.
+ */
+function resolveCopaBrasil2026Final(
+  inputFases: CupFases,
+  teams: CartolaTeamRaw[],
+): CupFases {
+  let fases: CupFases = { ...inputFases };
+  const byId = new Map(teams.map((team) => [String(team.id_cartola), team]));
+  const byName = new Map(teams.map((team) => [normalizeName(team.nome), team]));
+
+  const entrant = (name: string, id: string, badge = '', badgeFallback = ''): CopaEntrant => {
+    const team = (id && byId.get(String(id))) || byName.get(normalizeName(name));
+    return {
+      name: team?.nome || name,
+      id: String(team?.id_cartola ?? id ?? ''),
+      slot: -1,
+      badge: String(team?.escudo ?? badge ?? ''),
+      badgeFallback: String(team?.escudoFallback ?? badgeFallback ?? ''),
+    };
+  };
+
+  const semifinal = fases['Semifinal']?.matches;
+  const finalPhase = fases['Final'];
+  if (Array.isArray(semifinal) && semifinal.length === 2 &&
+      Array.isArray(finalPhase?.matches) && finalPhase.matches.length >= 2) {
+    const results = semifinal.map(resolveCopaMatch);
+    if (results.every(Boolean)) {
+      const finalMatches = finalPhase.matches.map((match: CupMatch) => {
+        const isThirdPlace = normalizeName(match.matchNumber).includes('3') ||
+          normalizeName(match.matchNumber).includes('terceirolugar');
+        const resultA = isThirdPlace ? results[0]!.loser : results[0]!.winner;
+        const resultB = isThirdPlace ? results[1]!.loser : results[1]!.winner;
+        const idA = isThirdPlace ? results[0]!.loserId : results[0]!.winnerId;
+        const idB = isThirdPlace ? results[1]!.loserId : results[1]!.winnerId;
+        const team1 = entrant(
+          resultA, idA,
+          String(match.team1Badge ?? ''), String(match.team1BadgeFallback ?? ''),
+        );
+        const team2 = entrant(
+          resultB, idB,
+          String(match.team2Badge ?? ''), String(match.team2BadgeFallback ?? ''),
+        );
+        return replaceCopaMatchTeams(match, team1, team2);
+      });
+      fases = { ...fases, Final: { ...finalPhase, isFinal: true, matches: finalMatches } };
+    }
+  }
+
+  const completedFinal = fases['Final'];
+  if (!Array.isArray(completedFinal?.matches)) return fases;
+  const finalMatch = completedFinal.matches.find((match: CupMatch) =>
+    normalizeName(match.matchNumber).includes('final') &&
+    !normalizeName(match.matchNumber).includes('lugar')
+  );
+  const thirdPlaceMatch = completedFinal.matches.find((match: CupMatch) =>
+    normalizeName(match.matchNumber).includes('3') ||
+    normalizeName(match.matchNumber).includes('terceirolugar')
+  );
+  const finalResult = finalMatch ? resolveCopaSingleGame(finalMatch) : null;
+  const thirdPlaceResult = thirdPlaceMatch ? resolveCopaSingleGame(thirdPlaceMatch) : null;
+  if (finalResult && thirdPlaceResult) {
+    return {
+      ...fases,
+      Final: {
+        ...completedFinal,
+        isFinal: true,
+        podium: [
+          { position: 1, team: finalResult.winner, badge: finalResult.winnerBadge, badgeFallback: finalResult.winnerBadgeFallback },
+          { position: 2, team: finalResult.loser, badge: finalResult.loserBadge, badgeFallback: finalResult.loserBadgeFallback },
+          { position: 3, team: thirdPlaceResult.winner, badge: thirdPlaceResult.winnerBadge, badgeFallback: thirdPlaceResult.winnerBadgeFallback },
+        ],
+      },
+    };
+  }
+  if (completedFinal.podium) {
+    const { podium: _stalePodium, ...withoutPodium } = completedFinal;
+    return { ...fases, Final: { ...withoutPodium, isFinal: true } };
+  }
+  return { ...fases, Final: { ...completedFinal, isFinal: true } };
+}
+
+/**
  * Inicializa os sorteios apenas quando a fase ainda está vazia e avança a chave
  * somente quando todos os confrontos da fase anterior têm vencedor definido.
  * Os IDs e os slots da planilha são salvos em cada confronto para permitir uma
@@ -435,9 +519,13 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
 
     // A progressão e os sorteios são determinísticos quanto ao momento de execução:
     // só preenchem fases vazias; após persistidos, uma nova sincronização não os refaz.
-    const progressedFases = ctx.season < 2027 || ctx.scope.kind === 'dados_externos'
+    const progressedFases = ctx.scope.kind === 'dados_externos'
       ? updatedFases
-      : resolveCopaBrasilProgression(updatedFases, externalRows(ctx), teams);
+      : ctx.season >= 2027
+        ? resolveCopaBrasilProgression(updatedFases, externalRows(ctx), teams)
+        : ctx.season === 2026
+          ? resolveCopaBrasil2026Final(updatedFases, teams)
+          : updatedFases;
 
     return { fases: progressedFases, teams };
   },
