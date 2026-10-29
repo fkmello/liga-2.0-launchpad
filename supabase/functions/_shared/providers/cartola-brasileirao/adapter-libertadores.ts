@@ -518,9 +518,12 @@ export function resolveLibertadoresProgression(
     for (const phaseName of downstream) {
       const phase = next?.[phaseName];
       if (!Array.isArray(phase?.matches)) continue;
-      const matches = phase.matches.map((match: ContinentalMatch) =>
-        match?.team1 || match?.team2 ? replaceMatchTeams(match, '', '') : match
-      );
+      const matches = phase.matches.map((match: ContinentalMatch) => {
+        const cleared: ContinentalMatch = { ...match, team1: '', team2: '' };
+        for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) cleared[field] = '';
+        delete cleared.manualWinner;
+        return cleared;
+      });
       next = { ...next, [phaseName]: { ...phase, matches } };
     }
     return next;
@@ -543,9 +546,12 @@ export function resolveLibertadoresProgression(
       next = { ...next, Final: { ...final, matches } };
     } else {
       // Semifinals are not complete: do not leave stale final/third-place teams or scores.
-      const matches = final.matches.map((match: ContinentalMatch) =>
-        match?.team1 || match?.team2 ? replaceMatchTeams(match, '', '') : match
-      );
+      const matches = final.matches.map((match: ContinentalMatch) => {
+        const cleared: ContinentalMatch = { ...match, team1: '', team2: '' };
+        for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) cleared[field] = '';
+        delete cleared.manualWinner;
+        return cleared;
+      });
       next = { ...next, Final: { ...final, matches } };
     }
   }
