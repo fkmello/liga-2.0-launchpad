@@ -144,10 +144,6 @@ function phaseHasAnyScore(phase: any): boolean {
   );
 }
 
-function phaseHasTeams(phase: any): boolean {
-  return (phase?.matches ?? []).some((match: any) => String(match?.team1 ?? '').trim() || String(match?.team2 ?? '').trim());
-}
-
 function shuffle<T>(items: T[]): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
