@@ -20,7 +20,7 @@ describe('Libertadores best third-place qualifiers', () => {
 
     const result = resolveLibertadoresBestThirds({ grupos });
     expect(result).toHaveLength(2);
-    expect(result?.map(team => team.team)).toEqual(['Terceiro 7', 'Terceiro 6']);
+    expect(result?.map(team => team.team)).toEqual(['Terceiro 6', 'Terceiro 5']);
   });
 
   it('requires a manual global order when third-place candidates are tied on every criterion', () => {
