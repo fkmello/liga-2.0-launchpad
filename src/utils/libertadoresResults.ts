@@ -5,7 +5,7 @@ export interface LibertadoresFinalMatch {
   scoreIda2?: string | number | null;
   scoreVolta1?: string | number | null;
   scoreVolta2?: string | number | null;
-  manualWinner?: string;
+  manualWinner?: string | null;
 }
 
 export interface LibertadoresMatchResult {
