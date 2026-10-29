@@ -167,7 +167,7 @@ export async function runPipeline(
 
   const comparison = diffPayloads(current, payload, {
     league: def.league,
-    semantic: def.league === 'libertadores' || (def.league === 'copa_brasil' && opts.compare === true),
+    semantic: def.league === 'libertadores' || def.league === 'sulamericana' || (def.league === 'copa_brasil' && opts.compare === true),
   });
   const fields = Object.keys(comparison.diff);
 
@@ -188,7 +188,9 @@ export async function runPipeline(
   });
   base.standings_divergences = def.league === 'libertadores'
     ? diffLibertadoresClassification(current, payload.classificacao)
-    : diffStandings(current, grupos);
+    : def.league === 'sulamericana'
+      ? diffLibertadoresClassification(current, payload.classificacao, ['H', 'GRUPO H'])
+      : diffStandings(current, grupos);
 
   // Diferença estrutural sem divergência esportiva é WARNING, nunca MATCH.
   base.compare_status = resolveSemanticCompareStatus(
