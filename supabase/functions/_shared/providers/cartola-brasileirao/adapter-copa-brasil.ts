@@ -235,13 +235,14 @@ export function resolveCopaBrasilProgression(
 
   // Primeiro sorteio: 56 participantes preliminares em 28 jogos.
   const first = fases['1ª Fase'];
-  if (Array.isArray(first?.matches) && first.matches.length === 28 && !phaseHasTeams(first) &&
-      preliminary.length === 56) {
+  if (Array.isArray(first?.matches) && first.matches.length === 28 && first.drawLocked !== true &&
+      !phaseHasAnyScore(first) && preliminary.length === 56 &&
+      new Set(preliminary.map((team) => team.id)).size === 56) {
     const drawn = shuffle(preliminary);
     const matches = first.matches.map((match: CupMatch, index: number) =>
       replaceCopaMatchTeams(match, drawn[index * 2], drawn[index * 2 + 1])
     );
-    fases = { ...fases, '1ª Fase': { ...first, matches } };
+    fases = { ...fases, '1ª Fase': { ...first, drawLocked: true, matches } };
   }
 
   // Segundo sorteio: 28 vencedores + quatro convidados. Só é feito uma vez,
@@ -251,7 +252,8 @@ export function resolveCopaBrasilProgression(
   const firstComplete = firstWinners.length === 28 && firstWinners.every(Boolean);
   const second = fases['2ª Fase'];
   if (firstComplete && Array.isArray(second?.matches) && second.matches.length === 16 &&
-      !phaseHasTeams(second) && invited.length === 4) {
+      second.drawLocked !== true && !phaseHasAnyScore(second) && invited.length === 4 &&
+      new Set(invited.map((team) => team.id)).size === 4) {
     const qualified = firstWinners.map((result: any) => {
       const source = firstMatches.find((match: CupMatch) => match.team1 === result.winner || match.team2 === result.winner);
       const winnerId = result.winnerId || String(source?.[source?.team1 === result.winner ? 'team1Id' : 'team2Id'] ?? '');
@@ -259,12 +261,14 @@ export function resolveCopaBrasilProgression(
       const current = winnerSlot >= 0 ? entrants[winnerSlot] : entrants.find((team) => team.id === winnerId);
       return current ?? { name: result.winner, id: winnerId, slot: winnerSlot };
     });
-    if (qualified.every((team: CopaEntrant) => team.id && team.name) && invited.every((team) => team.id && team.name)) {
-      const drawn = shuffle([...qualified, ...invited]);
+    const allEntrants = [...qualified, ...invited];
+    if (allEntrants.every((team: CopaEntrant) => team.id && team.name) &&
+        allEntrants.length === 32 && new Set(allEntrants.map((team) => team.id)).size === 32) {
+      const drawn = shuffle(allEntrants);
       const matches = second.matches.map((match: CupMatch, index: number) =>
         replaceCopaMatchTeams(match, drawn[index * 2], drawn[index * 2 + 1])
       );
-      fases = { ...fases, '2ª Fase': { ...second, matches } };
+      fases = { ...fases, '2ª Fase': { ...second, drawLocked: true, matches } };
     }
   }
 
