@@ -22,7 +22,8 @@ function normalizeName(s: unknown): string {
 }
 
 function isAuxiliaryGroupH(groupName: unknown): boolean {
-  return String(groupName ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === 'H';
+  const normalized = normalizeName(groupName).toUpperCase();
+  return normalized === 'H' || normalized === 'GRUPOH';
 }
 
 function classificationTeamKeys(payload: TournamentCachePayload | null, excludeGroupH = false): Set<string> {
