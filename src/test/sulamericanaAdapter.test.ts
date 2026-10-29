@@ -105,6 +105,30 @@ describe('Sul-Americana progression', () => {
     expect(result.Semifinal.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
   });
 
+  it('does not skip missing round-of-16 data to advance stale quarter-final results', () => {
+    const fases: any = {
+      'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({
+        team1: `Quartas A${i}`, team2: `Quartas B${i}`,
+        scoreIda1: '90,00', scoreIda2: '70,00',
+        scoreVolta1: '80,00', scoreVolta2: '75,00',
+      })) },
+      Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: 'Semis stale A', team2: 'Semis stale B' })) },
+      Final: { matches: [
+        { matchNumber: 'FINAL', team1: 'Finalista A', team2: 'Finalista B' },
+        { matchNumber: '3º LUGAR', team1: 'Terceiro A', team2: 'Terceiro B' },
+      ] },
+    };
+    const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
+    expect(result.Semifinal.matches.map((match: any) => [match.team1, match.team2])).toEqual([
+      ['Semis stale A', 'Semis stale B'],
+      ['Semis stale A', 'Semis stale B'],
+    ]);
+    expect(result.Final.matches.map((match: any) => [match.team1, match.team2])).toEqual([
+      ['Finalista A', 'Finalista B'],
+      ['Terceiro A', 'Terceiro B'],
+    ]);
+  });
+
   it('does not seed the bracket if the two Libertadores third-place qualifiers are unavailable', () => {
     const grupos: Record<string, unknown[]> = {};
     for (let i = 0; i < 7; i++) {
