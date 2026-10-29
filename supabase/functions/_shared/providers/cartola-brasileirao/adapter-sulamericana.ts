@@ -564,6 +564,7 @@ export function resolveSulamericanaProgression(
     }
   }
 
+  let progressionBlocked = false;
   for (const { source, target } of [
     { source: 'Oitavas de Final', target: 'Quartas de Final' },
     { source: 'Quartas de Final', target: 'Semifinal' },
@@ -571,12 +572,19 @@ export function resolveSulamericanaProgression(
     const sourceMatches = next?.[source]?.matches;
     const targetPhase = next?.[target];
     const expected = source === 'Oitavas de Final' ? 8 : 4;
+    // Missing/malformed phases also block downstream advancement; never skip ahead.
     if (!Array.isArray(sourceMatches) || sourceMatches.length !== expected ||
-        !Array.isArray(targetPhase?.matches)) continue;
+        !Array.isArray(targetPhase?.matches)) {
+      progressionBlocked = true;
+      break;
+    }
     // Keep the bracket synchronized: the entire phase advances only when every
     // confrontation has a winner, including any manual resolution of aggregate ties.
     const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
-    if (winners.some((winner: any) => !winner)) continue;
+    if (winners.some((winner: any) => !winner)) {
+      progressionBlocked = true;
+      break;
+    }
     const matches = targetPhase.matches.map((match: ContinentalMatch, index: number) => {
       const first = winners[index * 2];
       const second = winners[index * 2 + 1];
@@ -584,6 +592,9 @@ export function resolveSulamericanaProgression(
     });
     next = { ...next, [target]: { ...targetPhase, matches } };
   }
+
+  // Do not fill the final/third-place match from stale semifinal data.
+  if (progressionBlocked) return next;
 
   const semifinal = next?.Semifinal?.matches;
   const final = next?.Final;
