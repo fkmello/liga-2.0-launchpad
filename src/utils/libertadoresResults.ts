@@ -40,3 +40,35 @@ export function resolveLibertadoresFinalResult(
     ? { winner: match.team1, loser: match.team2 }
     : { winner: match.team2, loser: match.team1 };
 }
+
+export interface LibertadoresPodium {
+  champion: string;
+  runnerUp: string;
+  third: string;
+}
+
+/** Resolve the podium only when both the final and third-place match are decided. */
+export function resolveLibertadoresPodium(
+  matches: Array<LibertadoresFinalMatch & { matchNumber?: unknown }> | null | undefined,
+): LibertadoresPodium | null {
+  if (!Array.isArray(matches)) return null;
+  const normalizeLabel = (value: unknown) => String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '')
+    .toUpperCase()
+    .trim();
+  const finalMatch = matches.find(match => normalizeLabel(match.matchNumber) === 'FINAL');
+  const thirdMatch = matches.find(match => {
+    const label = normalizeLabel(match.matchNumber);
+    return label.includes('3') && label.includes('LUGAR');
+  });
+  const finalResult = resolveLibertadoresFinalResult(finalMatch);
+  const thirdResult = resolveLibertadoresFinalResult(thirdMatch);
+  if (!finalResult || !thirdResult) return null;
+  return {
+    champion: finalResult.winner,
+    runnerUp: finalResult.loser,
+    third: thirdResult.winner,
+  };
+}
+
