@@ -430,14 +430,14 @@ export function qualifiedGroupTeams(classification: { grupos: Record<string, unk
 
 function resolveTwoLeggedMatch(match: ContinentalMatch): { winner: string; loser: string } | null {
   if (!match?.team1 || !match?.team2) return null;
+  // An explicit manual decision is authoritative, even if a score field is missing.
+  if (match.manualWinner === match.team1) return { winner: String(match.team1), loser: String(match.team2) };
+  if (match.manualWinner === match.team2) return { winner: String(match.team2), loser: String(match.team1) };
   const ida1 = parseKnockoutScore(match.scoreIda1);
   const ida2 = parseKnockoutScore(match.scoreIda2);
   const volta1 = parseKnockoutScore(match.scoreVolta1);
   const volta2 = parseKnockoutScore(match.scoreVolta2);
   if (ida1 === null || ida2 === null || volta1 === null || volta2 === null) return null;
-  // A manually selected winner is kept in the match object, independently of API scores.
-  if (match.manualWinner === match.team1) return { winner: String(match.team1), loser: String(match.team2) };
-  if (match.manualWinner === match.team2) return { winner: String(match.team2), loser: String(match.team1) };
   const total1 = ida1 + volta1;
   const total2 = ida2 + volta2;
   if (total1 === total2) return null;
