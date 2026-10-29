@@ -483,6 +483,7 @@ export function resolveLibertadoresProgression(
     { source: 'Oitavas de Final', target: 'Quartas de Final' },
     { source: 'Quartas de Final', target: 'Semifinal' },
   ];
+  let progressionBlocked = false;
   for (const { source, target } of phases) {
     const sourceMatches = next?.[source]?.matches;
     const targetPhase = next?.[target];
@@ -490,7 +491,10 @@ export function resolveLibertadoresProgression(
     if (!Array.isArray(sourceMatches) || !Array.isArray(targetPhase?.matches) ||
         sourceMatches.length !== expectedSourceMatches) continue;
     const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
-    if (winners.some((winner: any) => !winner)) break;
+    if (winners.some((winner: any) => !winner)) {
+      progressionBlocked = true;
+      break;
+    }
     const pairs = [];
     for (let i = 0; i < winners.length; i += 2) {
       pairs.push([winners[i].winner, winners[i + 1].winner]);
@@ -500,6 +504,9 @@ export function resolveLibertadoresProgression(
     );
     next = { ...next, [target]: { ...targetPhase, matches } };
   }
+
+  // Never derive final/third-place fixtures from stale semifinal data when an earlier phase is blocked.
+  if (progressionBlocked) return next;
 
   const semifinal = next?.Semifinal?.matches;
   const final = next?.Final;
