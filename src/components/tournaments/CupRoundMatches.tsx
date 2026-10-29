@@ -1,4 +1,3 @@
-import { useTournamentFinished } from '@/hooks/useTournamentFinished';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -62,7 +61,6 @@ const getFaseInicial = (rodada?: number): string => {
 };
 
 const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase }: CupRoundMatchesProps) => {
-  const { finished } = useTournamentFinished(slug);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { isAdmin } = useAuth();
