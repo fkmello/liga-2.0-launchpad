@@ -54,7 +54,7 @@ export function resolveLibertadoresPodium(
   if (!Array.isArray(matches)) return null;
   const normalizeLabel = (value: unknown) => String(value ?? '')
     .normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .trim();
   const finalMatch = matches.find(match => normalizeLabel(match.matchNumber) === 'FINAL');
