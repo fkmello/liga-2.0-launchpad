@@ -90,12 +90,17 @@ describe('Sul-Americana progression', () => {
         scoreIda1: i < 7 ? '90,00' : '', scoreIda2: i < 7 ? '70,00' : '',
         scoreVolta1: i < 7 ? '80,00' : '', scoreVolta2: i < 7 ? '75,00' : '',
       })) },
-      'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({
+        team1: 'Quartas A' + i, team2: 'Quartas B' + i,
+        scoreIda1: '90,00', scoreIda2: '70,00',
+        scoreVolta1: '80,00', scoreVolta2: '75,00',
+      })) },
       Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: '', team2: '' })) },
       Final: { matches: [{ matchNumber: 'FINAL', team1: '', team2: '' }, { matchNumber: '3º LUGAR', team1: '', team2: '' }] },
     };
     const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
     expect(result['Quartas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+    expect(result.Semifinal.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
   });
 
   it('does not seed the bracket if the two Libertadores third-place qualifiers are unavailable', () => {
