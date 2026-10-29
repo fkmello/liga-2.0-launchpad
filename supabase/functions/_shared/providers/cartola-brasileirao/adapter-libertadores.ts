@@ -251,6 +251,82 @@ export function recalculateLibertadoresClassification(
   return { grupos };
 }
 
+/**
+ * Identifica os dois melhores terceiros colocados para a classificação cruzada
+ * da Sul-Americana. Usa os mesmos critérios da tabela de grupos: pontos, vitórias,
+ * saldo de pontos e pontos feitos. Empates exigem decisão manual explícita.
+ */
+export function resolveLibertadoresBestThirds(
+  classification: {
+    grupos: Record<string, unknown[]>;
+    desempatesManuais?: { grupos?: Record<string, string[]>; global?: string[] };
+  },
+): Array<{ team: string; group: string; points: number; wins: number; goalDiff: number; goalsFor: number }> | null {
+  const thirds: Array<{ team: string; group: string; points: number; wins: number; goalDiff: number; goalsFor: number }> = [];
+  const manualGroups = classification.desempatesManuais?.grupos ?? {};
+  for (const [group, rows] of Object.entries(classification.grupos ?? {})) {
+    const sortedRows = [...rows].sort((a, b) =>
+      standingValue(b as unknown[], 3) - standingValue(a as unknown[], 3) ||
+      standingValue(b as unknown[], 5) - standingValue(a as unknown[], 5) ||
+      standingValue(b as unknown[], 9) - standingValue(a as unknown[], 9) ||
+      standingValue(b as unknown[], 8) - standingValue(a as unknown[], 8) ||
+      ((manualGroups[group] ?? []).indexOf(String((a as unknown[])[2] ?? '').trim()) < 0 ? 999 : (manualGroups[group] ?? []).indexOf(String((a as unknown[])[2] ?? '').trim())) -
+      ((manualGroups[group] ?? []).indexOf(String((b as unknown[])[2] ?? '').trim()) < 0 ? 999 : (manualGroups[group] ?? []).indexOf(String((b as unknown[])[2] ?? '').trim()))
+    );
+    if (sortedRows.length < 3) return null;
+    const row = sortedRows[2] as unknown[];
+    const team = String(row[2] ?? '').trim();
+    if (!team) return null;
+    // If the third-place boundary is tied, require an explicit group draw order.
+    const compareRows = (a: unknown[], b: unknown[]) =>
+      standingValue(b, 3) - standingValue(a, 3) ||
+      standingValue(b, 5) - standingValue(a, 5) ||
+      standingValue(b, 9) - standingValue(a, 9) ||
+      standingValue(b, 8) - standingValue(a, 8);
+    if (sortedRows.length > 3 && compareRows(sortedRows[2] as unknown[], sortedRows[3] as unknown[]) === 0) {
+      const order = manualGroups[group] ?? [];
+      const third = String((sortedRows[2] as unknown[])[2] ?? '').trim();
+      const fourth = String((sortedRows[3] as unknown[])[2] ?? '').trim();
+      if (!order.includes(third) || !order.includes(fourth) || order.indexOf(third) === order.indexOf(fourth)) return null;
+    }
+    thirds.push({
+      team, group,
+      points: standingValue(row, 3),
+      wins: standingValue(row, 5),
+      goalDiff: standingValue(row, 9),
+      goalsFor: standingValue(row, 8),
+    });
+  }
+  if (thirds.length !== 8) return null;
+  const globalOrder = classification.desempatesManuais?.global ?? [];
+  thirds.sort((a, b) =>
+    b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor ||
+    ((globalOrder.indexOf(a.team) < 0 ? 999 : globalOrder.indexOf(a.team)) -
+     (globalOrder.indexOf(b.team) < 0 ? 999 : globalOrder.indexOf(b.team)))
+  );
+  for (let i = 1; i < thirds.length; i++) {
+    const a = thirds[i - 1], b = thirds[i];
+    if (a.points === b.points && a.wins === b.wins && a.goalDiff === b.goalDiff && a.goalsFor === b.goalsFor) {
+      if (!globalOrder.includes(a.team) || !globalOrder.includes(b.team) || globalOrder.indexOf(a.team) === globalOrder.indexOf(b.team)) return null;
+    }
+  }
+  return thirds.slice(0, 2);
+}
+
+function areAllLibertadoresGroupMatchesComplete(fases: ContinentalFases): boolean {
+  const stage = fases?.['Fase de Grupos'];
+  if (!stage) return false;
+  for (let round = 1; round <= 6; round++) {
+    const groups = stage[`rodada_${round}`]?.groups;
+    if (!Array.isArray(groups) || groups.length === 0) return false;
+    for (const group of groups) {
+      if (!Array.isArray(group?.matches) || group.matches.length === 0 ||
+          group.matches.some((match: any) => parseFantasyScore(match?.score1) === null || parseFantasyScore(match?.score2) === null)) return false;
+    }
+  }
+  return true;
+}
+
 /** Mantém a classificação anterior intacta em rodadas eliminatórias ou não mapeadas. */
 export function resolveLibertadoresClassification(
   fases: ContinentalFases,
@@ -259,7 +335,11 @@ export function resolveLibertadoresClassification(
 ): { grupos: Record<string, unknown[]> } {
   if (!shouldRecalculateLibertadoresClassification(targetRound)) return previousClassification;
   const recalculated = recalculateLibertadoresClassification(fases, previousClassification);
-  return { ...recalculated, desempatesManuais: (previousClassification as any)?.desempatesManuais };
+  const desempatesManuais = (previousClassification as any)?.desempatesManuais;
+  const withManual = { ...recalculated, desempatesManuais };
+  if (!areAllLibertadoresGroupMatchesComplete(fases)) return withManual;
+  const melhoresTerceiros = resolveLibertadoresBestThirds(withManual);
+  return melhoresTerceiros ? { ...withManual, melhoresTerceiros } : { ...withManual, melhoresTerceiros: [] };
 }
 
 
