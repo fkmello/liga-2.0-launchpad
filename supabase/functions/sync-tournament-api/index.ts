@@ -155,12 +155,26 @@ Deno.serve(async (req) => {
         })
       : createSheetsCacheRepository(supabaseAdmin);
 
+    // Sul-Americana reads the Libertadores shadow payload read-only to import
+    // its two best third-place qualifiers. No cross-tournament write is performed.
+    const relatedPayloads: Record<string, any> = {};
+    if (baseDef.league === 'sulamericana') {
+      const libertadoresRepo = createShadowRepository({
+        supabaseAdmin,
+        league: 'libertadores',
+        season: resolvedSeason,
+        legacyReader: createSupabaseLegacyReader(supabaseAdmin),
+      });
+      relatedPayloads.libertadores = await libertadoresRepo.load(shadowKey('libertadores', resolvedSeason));
+    }
+
     const result = await runPipeline(def, resolvedSeason, scope, repo, {
       dryRun,
       compare,
       persist,
       syncedBy,
       authMode,
+      relatedPayloads,
     });
 
 
