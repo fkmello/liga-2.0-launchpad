@@ -379,7 +379,7 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
 
     // A progressão e os sorteios são determinísticos quanto ao momento de execução:
     // só preenchem fases vazias; após persistidos, uma nova sincronização não os refaz.
-    const progressedFases = ctx.scope.kind === 'dados_externos'
+    const progressedFases = ctx.season < 2027 || ctx.scope.kind === 'dados_externos'
       ? updatedFases
       : resolveCopaBrasilProgression(updatedFases, externalRows(ctx), teams);
 
@@ -403,8 +403,9 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
       if (!Array.isArray(row)) return row;
       if (!team) return row;
       const next = [...row];
-      // O nome vem da API; a linha/slot e o ID continuam sendo a identidade da inscrição.
-      if (team.nome) next[0] = team.nome;
+      // A atualização automática de nomes faz parte do fluxo novo (2027+).
+      // A temporada atual preserva o comportamento histórico e atualiza apenas escudos.
+      if (ctx.season >= 2027 && team.nome) next[0] = team.nome;
       if (id) {
         if (next.length < 2) next[1] = id;
         else next[1] = id;
