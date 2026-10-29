@@ -124,9 +124,14 @@ Deno.serve(async (req) => {
 
     // ── Destino de escrita: registry manda; `shadow=false` é privilégio de admin ──
     const shadowParam = url.searchParams.get('shadow');
-    if (shadowParam !== null && authMode !== 'admin') {
+    const trustedCronOfficialWrite =
+      authMode === 'secret' &&
+      shadowParam === 'false' &&
+      baseDef.persistMode === 'official' &&
+      baseDef.cron?.allowOfficialPersistence === true;
+    if (shadowParam !== null && authMode !== 'admin' && !trustedCronOfficialWrite) {
       return json(
-        { error: 'Parâmetro "shadow" é restrito a administradores autenticados' },
+        { error: 'Parâmetro "shadow" é restrito a administradores autenticados ou cron explicitamente autorizado' },
         403,
       );
     }
@@ -141,8 +146,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Shadow é o padrão seguro; só sai dele com persistMode='official' + admin.
-    const shadow = !(baseDef.persistMode === 'official' && authMode === 'admin' && shadowParam === 'false');
+    // Shadow é o padrão seguro; cache oficial exige persistMode='official' e admin ou cron explicitamente autorizado.
+    const shadow = !(baseDef.persistMode === 'official' && shadowParam === 'false' && (authMode === 'admin' || trustedCronOfficialWrite));
 
     const key = shadowKey(baseDef.league, resolvedSeason);
     const def = shadow ? { ...baseDef, cacheKey: () => key } : baseDef;
