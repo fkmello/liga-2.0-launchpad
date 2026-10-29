@@ -215,7 +215,7 @@ export function useBaseDadosCopa(fase: string = '1ª Fase') {
       // flow reads API-normalized names/IDs/shields from the consolidated shadow cache.
       if (DEFAULT_SEASON >= 2027) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
-        if (Array.isArray(shadow?.dados_externos?.rows) && shadow.dados_externos.rows.length > 0) {
+        if (shadow && Array.isArray(shadow?.dados_externos?.rows)) {
           const rows = shadow.dados_externos.rows as string[][];
           return { headers: [], rows, raw: rows };
         }
