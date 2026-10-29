@@ -57,6 +57,7 @@ describe('Copa do Brasil automatic draws and progression', () => {
     const matches = first['1ª Fase'].matches;
     const entrants = matches.flatMap((match: any) => [match.team1, match.team2]);
 
+    expect(first['1ª Fase'].drawLocked).toBe(true);
     expect(matches).toHaveLength(28);
     expect(entrants).toHaveLength(56);
     expect(new Set(entrants).size).toBe(56);
@@ -75,6 +76,7 @@ describe('Copa do Brasil automatic draws and progression', () => {
     next = resolveCopaBrasilProgression(next, rows, teams);
 
     const second = next['2ª Fase'].matches;
+    expect(next['2ª Fase'].drawLocked).toBe(true);
     expect(second).toHaveLength(16);
     expect(second.flatMap((match: any) => [match.team1, match.team2])).toHaveLength(32);
     expect(new Set(second.flatMap((match: any) => [match.team1, match.team2])).size).toBe(32);
