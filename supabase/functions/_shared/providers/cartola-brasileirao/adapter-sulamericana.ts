@@ -552,15 +552,6 @@ export function resolveLibertadoresProgression(
         return cleared;
       });
       next = { ...next, Final: { ...final, matches } };
-    } else {
-      // Semifinals are not complete: do not leave stale final/third-place teams or scores.
-      const matches = final.matches.map((match: ContinentalMatch) => {
-        const cleared: ContinentalMatch = { ...match, team1: '', team2: '' };
-        for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) cleared[field] = '';
-        delete cleared.manualWinner;
-        return cleared;
-      });
-      next = { ...next, Final: { ...final, matches } };
     }
   }
   return next;
