@@ -216,9 +216,9 @@ async function parseCopaBaseDados(accessToken: string, spreadsheetId: string) {
   // a fourth internal column used by the API adapter.
   const rows = [
     ...preRows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
-      .map((row) => [...row, "preliminar"]),
+      .map((row) => [row[0] ?? "", row[1] ?? "", row[2] ?? "", "preliminar"]),
     ...fase2Rows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
-      .map((row) => [...row, "convidado"]),
+      .map((row) => [row[0] ?? "", row[1] ?? "", row[2] ?? "", "convidado"]),
   ];
   const headers = [...headerRow, "origem_interna"];
   return { headers, rows, raw: [headers, ...rows] };
