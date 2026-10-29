@@ -134,7 +134,7 @@ function parseKnockoutScore(value: unknown): number | null {
   return Number.isFinite(score) ? score : null;
 }
 
-type CopaEntrant = { name: string; id: string; slot: number };
+type CopaEntrant = { name: string; id: string; slot: number; badge: string };
 
 function phaseHasAnyScore(phase: any): boolean {
   return (phase?.matches ?? []).some((match: any) =>
@@ -183,6 +183,8 @@ function replaceCopaMatchTeams(match: CupMatch, team1: CopaEntrant, team2: CopaE
     team2Id: team2.id,
     team1Slot: team1.slot,
     team2Slot: team2.slot,
+    team1Badge: team1.badge,
+    team2Badge: team2.badge,
   };
   if (!samePair) {
     for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) next[field] = '';
@@ -208,7 +210,8 @@ export function resolveCopaBrasilProgression(
     const id = rowId(row);
     const team = byId.get(id);
     const name = team?.nome || rowName(row);
-    return { name: String(name ?? '').trim(), id, slot };
+    const badge = String(team?.escudo ?? (Array.isArray(row) ? row[2] : '') ?? '').trim();
+    return { name: String(name ?? '').trim(), id, slot, badge };
   }).filter((team) => team.id && team.name);
 
   const preliminary = entrants.filter((team) => rowRole(rows[team.slot]) === 'preliminar');
@@ -225,7 +228,7 @@ export function resolveCopaBrasilProgression(
       const team1 = Number.isInteger(slot1) ? entrants[slot1] : entrants.find((t) => normalizeName(rowName(rows[t.slot])) === normalizeName(match.team1));
       const team2 = Number.isInteger(slot2) ? entrants[slot2] : entrants.find((t) => normalizeName(rowName(rows[t.slot])) === normalizeName(match.team2));
       if (!team1 || !team2) return match;
-      return { ...match, team1: team1.name, team2: team2.name, team1Id: team1.id, team2Id: team2.id, team1Slot: team1.slot, team2Slot: team2.slot };
+      return { ...match, team1: team1.name, team2: team2.name, team1Id: team1.id, team2Id: team2.id, team1Slot: team1.slot, team2Slot: team2.slot, team1Badge: team1.badge, team2Badge: team2.badge };
     });
     fases = { ...fases, [phaseName]: { ...phase, matches } };
   }
@@ -256,7 +259,7 @@ export function resolveCopaBrasilProgression(
       const winnerId = result.winnerId || String(source?.[source?.team1 === result.winner ? 'team1Id' : 'team2Id'] ?? '');
       const winnerSlot = result.winnerSlot >= 0 ? result.winnerSlot : Number(source?.[source?.team1 === result.winner ? 'team1Slot' : 'team2Slot'] ?? -1);
       const current = winnerSlot >= 0 ? entrants[winnerSlot] : entrants.find((team) => team.id === winnerId);
-      return current ?? { name: result.winner, id: winnerId, slot: winnerSlot };
+      return current ?? { name: result.winner, id: winnerId, slot: winnerSlot, badge: String(source?.[source?.team1 === result.winner ? 'team1Badge' : 'team2Badge'] ?? '') };
     });
     const allEntrants = [...qualified, ...invited];
     if (allEntrants.every((team: CopaEntrant) => team.id && team.name) &&
@@ -287,8 +290,8 @@ export function resolveCopaBrasilProgression(
       const b = winners[i + 1]!;
       const aSlot = a.winnerSlot >= 0 ? a.winnerSlot : entrants.findIndex((team) => team.id === a.winnerId);
       const bSlot = b.winnerSlot >= 0 ? b.winnerSlot : entrants.findIndex((team) => team.id === b.winnerId);
-      const teamA = aSlot >= 0 ? entrants[aSlot] : { name: a.winner, id: a.winnerId, slot: aSlot };
-      const teamB = bSlot >= 0 ? entrants[bSlot] : { name: b.winner, id: b.winnerId, slot: bSlot };
+      const teamA = aSlot >= 0 ? entrants[aSlot] : { name: a.winner, id: a.winnerId, slot: aSlot, badge: '' };
+      const teamB = bSlot >= 0 ? entrants[bSlot] : { name: b.winner, id: b.winnerId, slot: bSlot, badge: '' };
       pairs.push([teamA, teamB]);
     }
     const matches = targetPhase.matches.map((match: CupMatch, index: number) =>
@@ -308,14 +311,14 @@ export function resolveCopaBrasilProgression(
         if (label.includes('3') || label.includes('terceirolugar')) {
           const loser1Slot = results[0]!.loserSlot >= 0 ? results[0]!.loserSlot : entrants.findIndex((team) => team.id === results[0]!.loserId);
           const loser2Slot = results[1]!.loserSlot >= 0 ? results[1]!.loserSlot : entrants.findIndex((team) => team.id === results[1]!.loserId);
-          const t1 = loser1Slot >= 0 ? entrants[loser1Slot] : { name: results[0]!.loser, id: results[0]!.loserId, slot: loser1Slot };
-          const t2 = loser2Slot >= 0 ? entrants[loser2Slot] : { name: results[1]!.loser, id: results[1]!.loserId, slot: loser2Slot };
+          const t1 = loser1Slot >= 0 ? entrants[loser1Slot] : { name: results[0]!.loser, id: results[0]!.loserId, slot: loser1Slot, badge: '' };
+          const t2 = loser2Slot >= 0 ? entrants[loser2Slot] : { name: results[1]!.loser, id: results[1]!.loserId, slot: loser2Slot, badge: '' };
           return replaceCopaMatchTeams(match, t1, t2);
         }
         const winner1Slot = results[0]!.winnerSlot >= 0 ? results[0]!.winnerSlot : entrants.findIndex((team) => team.id === results[0]!.winnerId);
         const winner2Slot = results[1]!.winnerSlot >= 0 ? results[1]!.winnerSlot : entrants.findIndex((team) => team.id === results[1]!.winnerId);
-        const t1 = winner1Slot >= 0 ? entrants[winner1Slot] : { name: results[0]!.winner, id: results[0]!.winnerId, slot: winner1Slot };
-        const t2 = winner2Slot >= 0 ? entrants[winner2Slot] : { name: results[1]!.winner, id: results[1]!.winnerId, slot: winner2Slot };
+        const t1 = winner1Slot >= 0 ? entrants[winner1Slot] : { name: results[0]!.winner, id: results[0]!.winnerId, slot: winner1Slot, badge: '' };
+        const t2 = winner2Slot >= 0 ? entrants[winner2Slot] : { name: results[1]!.winner, id: results[1]!.winnerId, slot: winner2Slot, badge: '' };
         return replaceCopaMatchTeams(match, t1, t2);
       });
       fases = { ...fases, Final: { ...finalPhase, matches: finalMatches } };
