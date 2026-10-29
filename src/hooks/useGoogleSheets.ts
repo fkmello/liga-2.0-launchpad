@@ -62,6 +62,12 @@ export interface ConfrontoCopa {
   manualPenaltyScore2?: number | null;
   idCartola1?: string;
   idCartola2?: string;
+  team1Id?: string;
+  team2Id?: string;
+  team1Slot?: number;
+  team2Slot?: number;
+  team1Badge?: string;
+  team2Badge?: string;
   /** Identificador opcional de torneio (ver Confronto.league). */
   league?: string;
 }
