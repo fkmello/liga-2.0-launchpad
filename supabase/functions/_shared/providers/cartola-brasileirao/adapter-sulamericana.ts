@@ -594,37 +594,56 @@ export function resolveSulamericanaProgression(
     }
   }
 
-  let progressionBlocked = false;
-  for (const { source, target } of [
+  const phases = [
     { source: 'Oitavas de Final', target: 'Quartas de Final' },
     { source: 'Quartas de Final', target: 'Semifinal' },
-  ]) {
+  ];
+  let blockedAt = -1;
+  for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex++) {
+    const { source, target } = phases[phaseIndex];
     const sourceMatches = next?.[source]?.matches;
     const targetPhase = next?.[target];
-    const expected = source === 'Oitavas de Final' ? 8 : 4;
-    // Missing/malformed phases also block downstream advancement; never skip ahead.
-    if (!Array.isArray(sourceMatches) || sourceMatches.length !== expected ||
+    const expectedSourceMatches = source === 'Oitavas de Final' ? 8 : 4;
+    if (!Array.isArray(sourceMatches) || sourceMatches.length !== expectedSourceMatches ||
         !Array.isArray(targetPhase?.matches)) {
-      progressionBlocked = true;
+      blockedAt = phaseIndex;
       break;
     }
-    // Keep the bracket synchronized: the entire phase advances only when every
-    // confrontation has a winner, including any manual resolution of aggregate ties.
     const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
     if (winners.some((winner: any) => !winner)) {
-      progressionBlocked = true;
+      blockedAt = phaseIndex;
       break;
     }
-    const matches = targetPhase.matches.map((match: ContinentalMatch, index: number) => {
-      const first = winners[index * 2];
-      const second = winners[index * 2 + 1];
-      return first && second ? replaceMatchTeams(match, first.winner, second.winner) : match;
-    });
+    const pairs = [];
+    for (let i = 0; i < winners.length; i += 2) {
+      pairs.push([winners[i].winner, winners[i + 1].winner]);
+    }
+    const matches = targetPhase.matches.map((match: ContinentalMatch, index: number) =>
+      pairs[index] ? replaceMatchTeams(match, pairs[index][0], pairs[index][1]) : match
+    );
     next = { ...next, [target]: { ...targetPhase, matches } };
   }
 
-  // Do not fill the final/third-place match from stale semifinal data.
-  if (progressionBlocked) return next;
+  // If a phase is incomplete, remove stale pairings, scores, and manual decisions
+  // from every downstream phase. The next phase is populated only when all matches
+  // in the source phase have a winner.
+  if (blockedAt >= 0) {
+    const downstream = blockedAt === 0
+      ? ['Quartas de Final', 'Semifinal', 'Final']
+      : ['Semifinal', 'Final'];
+    for (const phaseName of downstream) {
+      const phase = next?.[phaseName];
+      if (!Array.isArray(phase?.matches)) continue;
+      const matches = phase.matches.map((match: ContinentalMatch) => {
+        const cleared: ContinentalMatch = { ...match, team1: '', team2: '' };
+        for (const field of ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2']) cleared[field] = '';
+        delete cleared.manualWinner;
+        return cleared;
+      });
+      next = { ...next, [phaseName]: { ...phase, matches } };
+    }
+    return next;
+  }
 
   const semifinal = next?.Semifinal?.matches;
   const final = next?.Final;
