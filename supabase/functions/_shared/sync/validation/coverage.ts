@@ -51,20 +51,26 @@ function teamKeys(payload: TournamentCachePayload | null): Set<string> {
 
 function matchKeysFromPayload(payload: TournamentCachePayload | null): Set<string> {
   const out = new Set<string>();
-  for (const [faseKey, fase] of Object.entries<any>(payload?.fases ?? {})) {
-    for (const m of fase?.matches ?? fase?.confrontos ?? []) {
-      const k = matchKey(faseKey, m.team1 ?? m.home, m.team2 ?? m.away);
-      if (k) out.add(k);
-    }
-    // Fases aninhadas (ex.: fase_grupos → rodada_X)
-    if (fase && !Array.isArray(fase.matches)) {
-      for (const [sub, subFase] of Object.entries<any>(fase ?? {})) {
-        for (const m of subFase?.matches ?? []) {
-          const k = matchKey(`${faseKey}.${sub}`, m.team1 ?? m.home, m.team2 ?? m.away);
-          if (k) out.add(k);
-        }
+
+  const visit = (value: any, path: string, depth = 0): void => {
+    if (!value || typeof value !== 'object' || depth > 8) return;
+    const directMatches = value.matches ?? value.confrontos;
+    if (Array.isArray(directMatches)) {
+      for (const match of directMatches) {
+        const key = matchKey(path, match?.team1 ?? match?.home, match?.team2 ?? match?.away);
+        if (key) out.add(key);
       }
     }
+    // A Sul-Americana legada pode aninhar jogos como fase → rodada → grupo → matches.
+    // Percorre estruturas conhecidas sem depender de um formato único de cache.
+    for (const [childKey, child] of Object.entries(value)) {
+      if (childKey === 'matches' || childKey === 'confrontos') continue;
+      if (child && typeof child === 'object') visit(child, `${path}.${childKey}`, depth + 1);
+    }
+  };
+
+  for (const [faseKey, fase] of Object.entries<any>(payload?.fases ?? {})) {
+    visit(fase, faseKey);
   }
   return out;
 }
