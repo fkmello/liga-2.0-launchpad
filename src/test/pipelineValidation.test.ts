@@ -527,6 +527,35 @@ describe('pipeline validation indicators', () => {
     expect(report.missing_teams).toEqual([]);
   });
 
+  it('counts Sul-Americana matches nested by round and group in coverage', () => {
+    const payload = {
+      classificacao: { grupos: {} },
+      dados_externos: { rows: [] },
+      fases: {
+        'Fase de Grupos': {
+          rodada_1: {
+            groups: {
+              'GRUPO A': {
+                matches: [{ team1: 'Time A', team2: 'Time B', score1: 1, score2: 0 }],
+              },
+            },
+          },
+        },
+      },
+    };
+    const report = buildCoverageReport({
+      league: 'sulamericana',
+      baseline: payload as any,
+      generated: payload as any,
+      matches: [],
+      standings: {},
+    });
+
+    expect(report.matches_expected).toBe(1);
+    expect(report.matches_loaded).toBe(1);
+    expect(report.missing_matches).toEqual([]);
+  });
+
   it('ignores the legacy group H when comparing Sul-Americana standings', () => {
     const baseline = {
       classificacao: {
