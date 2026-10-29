@@ -221,10 +221,8 @@ export function useBaseDadosCopa(fase: string = '1ª Fase') {
       // flow reads API-normalized names/IDs/shields from the consolidated shadow cache.
       if (DEFAULT_SEASON >= 2027) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
-        if (shadow && Array.isArray(shadow?.dados_externos?.rows)) {
-          const rows = shadow.dados_externos.rows as string[][];
-          return { headers: [], rows, raw: rows };
-        }
+        const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows as string[][] : [];
+        return { headers: [], rows, raw: rows };
       }
       return fetchWithFallback<DadosExternosData>(
         'copa:brasil',
@@ -244,9 +242,10 @@ export function useConfrontosCopa(fase: string) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
         // Once the consolidated cache exists, an empty/unfilled phase is intentional:
         // never fall back to the old sheet pairings and accidentally undo the draw.
-        if (shadow && shadow.fases && typeof shadow.fases === 'object') {
+        if (shadow?.fases && typeof shadow.fases === 'object') {
           return shadow.fases[fase] ?? { fase, rodadaInfo: '', matches: [] };
         }
+        return { fase, rodadaInfo: '', matches: [] };
       }
       return fetchWithFallback<ConfrontosCopaData>(
         'copa:brasil',
