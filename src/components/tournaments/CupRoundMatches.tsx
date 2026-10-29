@@ -214,7 +214,7 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
   };
 
   const saveManualWinner = async (matchNumber: string, winner: string) => {
-    if (!isAdmin || DEFAULT_SEASON < 2027 || !winner) return;
+    if (!isAdmin || DEFAULT_SEASON < 2026 || !winner) return;
     try {
       const cacheKey = getTournamentCacheKey('copa_brasil', DEFAULT_SEASON);
       const { data: row, error: readError } = await supabase
@@ -327,7 +327,7 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
                     playedCount1={pc1}
                     playedCount2={pc2}
                   />
-                  {DEFAULT_SEASON >= 2027 && isAdmin && hasUnresolvedTie(match) && (
+                  {DEFAULT_SEASON >= 2026 && isAdmin && hasUnresolvedTie(match) && (
                     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                       <p className="text-xs text-muted-foreground">
                         Empate no {fase === 'Final' ? 'jogo único' : 'placar agregado'}. Selecione manualmente quem avança.
@@ -352,7 +352,7 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
           )}
 
           {/* Podium */}
-          {finished && data.podium && data.podium.some(p => p.team) && (
+          {data.podium && data.podium.some(p => p.team) && (
             <div className="mt-6 space-y-3">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Trophy className="w-5 h-5 text-yellow-500" />
