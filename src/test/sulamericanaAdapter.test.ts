@@ -250,10 +250,10 @@ describe('Sul-Americana progression', () => {
     ];
     const fases = completeGroupFases();
     for (let round = 1; round <= 6; round++) {
-      fases['Fase de Grupos'][`rodada_${round}`].groups.push({
-        name: 'GRUPO H',
-        matches: [{ team1: 'Equipe Fictícia H1', team2: 'Equipe Fictícia H2', score1: '', score2: '' }],
-      });
+      fases['Fase de Grupos'][`rodada_${round}`].groups = [
+        ...fases['Fase de Grupos'][`rodada_${round}`].groups,
+        { name: 'GRUPO H', matches: [{ team1: 'Equipe Fictícia H1', team2: 'Equipe Fictícia H2', score1: '', score2: '' }] },
+      ];
     }
     const result = resolveSulamericanaProgression(fases, { grupos }, [
       { team: 'Libertadores Third 1', points: 15, wins: 3, goalDiff: 5, goalsFor: 50 },
