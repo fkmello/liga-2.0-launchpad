@@ -334,6 +334,11 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
     const fases = (ctx.previous?.fases ?? {}) as CupFases;
     const ids = extractIds(ctx);
     const teams = ids.length ? await fetchCartolaTeams(ids) : [];
+    if (ctx.season >= 2027 && (ids.length !== 60 || teams.length !== ids.length)) {
+      throw new Error(
+        `Copa do Brasil ${ctx.season}: esperados 60 IDs Cartola válidos e 60 respostas da API; recebidos ${ids.length} IDs e ${teams.length} times. Nenhum sorteio foi alterado.`,
+      );
+    }
 
     // A Sync #1 ocorre com o mercado aberto e consolida a rodada anterior.
     // Para testes/reparos manuais, scope=rodada permite apontar a rodada exata.
