@@ -211,11 +211,21 @@ Deno.serve(async (req) => {
             return candidate === undefined ? '' : String(candidate).trim();
           })
         : [];
-      // Fail closed: a partial/empty spreadsheet import must not replace the known roster.
-      if (Array.isArray(sourceRows) && sourceRows.length === 60 && ids.every(Boolean) && new Set(ids).size === 60) {
+      const preliminaryCount = Array.isArray(sourceRows)
+        ? sourceRows.filter((row: any) => String(Array.isArray(row) ? row[3] ?? '' : row?.role ?? '').toLowerCase().includes('prelim')).length
+        : 0;
+      const invitedCount = Array.isArray(sourceRows)
+        ? sourceRows.filter((row: any) => String(Array.isArray(row) ? row[3] ?? '' : row?.role ?? '').toLowerCase().includes('convid')).length
+        : 0;
+      // Fail closed: require the complete roster and source-tab markers before replacing
+      // participant rows. This prevents a stale/partial import from changing the draw.
+      if (Array.isArray(sourceRows) && sourceRows.length === 60 && ids.every(Boolean) &&
+          new Set(ids).size === 60 && preliminaryCount === 56 && invitedCount === 4) {
         previousDataOverride = { rows: sourceRows };
-      } else if (Array.isArray(sourceRows) && sourceRows.length > 0) {
-        console.warn('[copa_brasil] roster refresh skipped: expected 60 unique Cartola IDs');
+      } else {
+        throw new Error(
+          '[copa_brasil] sincronização bloqueada: importe a planilha com 56 participantes preliminares e 4 convidados (60 IDs Cartola únicos) antes de sincronizar a temporada 2027+',
+        );
       }
     }
 
