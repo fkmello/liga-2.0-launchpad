@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCopaBrasilProgression } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-copa-brasil';
+import { resolveCopaBrasil2026Final, resolveCopaBrasilProgression } from '../../supabase/functions/_shared/providers/cartola-brasileirao/adapter-copa-brasil';
 
 function setup() {
   const rows = [
@@ -49,6 +49,70 @@ function completePhase(matches: any[]) {
     scoreVolta2: '60,00',
   }));
 }
+
+describe('Copa do Brasil current 2026 semifinals and podium', () => {
+  it('fills the final and third-place match from the two-leg semifinal winners', () => {
+    const phases: any = {
+      Semifinal: { matches: [
+        { team1: 'Time A', team2: 'Time B', matchNumber: '1', scoreIda1: '90,00', scoreIda2: '70,00', scoreVolta1: '80,00', scoreVolta2: '75,00' },
+        { team1: 'Time C', team2: 'Time D', matchNumber: '2', scoreIda1: '60,00', scoreIda2: '80,00', scoreVolta1: '70,00', scoreVolta2: '65,00' },
+      ] },
+      Final: { isFinal: true, matches: [
+        { team1: '', team2: '', matchNumber: 'FINAL', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+        { team1: '', team2: '', matchNumber: '3º LUGAR', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+      ] },
+    };
+    const teams: any[] = [
+      { id_cartola: '101', nome: 'Time A', escudo: 'https://example.test/a.svg', escudoFallback: 'https://example.test/a.png' },
+      { id_cartola: '102', nome: 'Time B', escudo: 'https://example.test/b.svg', escudoFallback: 'https://example.test/b.png' },
+      { id_cartola: '103', nome: 'Time C', escudo: 'https://example.test/c.svg', escudoFallback: 'https://example.test/c.png' },
+      { id_cartola: '104', nome: 'Time D', escudo: 'https://example.test/d.svg', escudoFallback: 'https://example.test/d.png' },
+    ];
+
+    const next = resolveCopaBrasil2026Final(phases, teams);
+    expect(next.Final.matches[0].team1).toBe('Time A');
+    expect(next.Final.matches[0].team2).toBe('Time D');
+    expect(next.Final.matches[1].team1).toBe('Time B');
+    expect(next.Final.matches[1].team2).toBe('Time C');
+    expect(next.Final.matches[0].team1Badge).toBe('https://example.test/a.svg');
+    expect(next.Final.matches[1].team2Badge).toBe('https://example.test/c.svg');
+  });
+
+  it('creates the podium only when the final and third-place winners are resolved', () => {
+    const phases: any = {
+      Semifinal: { matches: [
+        { team1: 'Time A', team2: 'Time B', matchNumber: '1', scoreIda1: '90,00', scoreIda2: '70,00', scoreVolta1: '80,00', scoreVolta2: '75,00' },
+        { team1: 'Time C', team2: 'Time D', matchNumber: '2', scoreIda1: '60,00', scoreIda2: '80,00', scoreVolta1: '70,00', scoreVolta2: '65,00' },
+      ] },
+      Final: { matches: [
+        { team1: 'Time A', team2: 'Time D', matchNumber: 'FINAL', scoreIda1: '95,00', scoreIda2: '85,00', scoreVolta1: '', scoreVolta2: '' },
+        { team1: 'Time B', team2: 'Time C', matchNumber: '3º LUGAR', scoreIda1: '88,00', scoreIda2: '80,00', scoreVolta1: '', scoreVolta2: '' },
+      ] },
+    };
+    const next = resolveCopaBrasil2026Final(phases, []);
+    expect(next.Final.podium.map((entry: any) => [entry.position, entry.team])).toEqual([
+      [1, 'Time A'], [2, 'Time D'], [3, 'Time B'],
+    ]);
+  });
+
+  it('uses a manual semifinal winner when the aggregate score is tied', () => {
+    const phases: any = {
+      Semifinal: { matches: [
+        { team1: 'Time A', team2: 'Time B', matchNumber: '1', scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '70,00', scoreVolta2: '80,00', manualWinner: 'Time B' },
+        { team1: 'Time C', team2: 'Time D', matchNumber: '2', scoreIda1: '90,00', scoreIda2: '60,00', scoreVolta1: '80,00', scoreVolta2: '70,00' },
+      ] },
+      Final: { matches: [
+        { team1: '', team2: '', matchNumber: 'FINAL', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+        { team1: '', team2: '', matchNumber: '3º LUGAR', scoreIda1: '', scoreIda2: '', scoreVolta1: '', scoreVolta2: '' },
+      ] },
+    };
+    const next = resolveCopaBrasil2026Final(phases, []);
+    expect(next.Final.matches[0].team1).toBe('Time B');
+    expect(next.Final.matches[0].team2).toBe('Time C');
+    expect(next.Final.matches[1].team1).toBe('Time A');
+    expect(next.Final.matches[1].team2).toBe('Time D');
+  });
+});
 
 describe('Copa do Brasil automatic draws and progression', () => {
   it('draws the 56 preliminary entrants once and keeps all participants unique', () => {
