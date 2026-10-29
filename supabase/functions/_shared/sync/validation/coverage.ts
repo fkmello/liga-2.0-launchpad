@@ -21,6 +21,23 @@ function normalizeName(s: unknown): string {
     .toLowerCase();
 }
 
+function isAuxiliaryGroupH(groupName: unknown): boolean {
+  return String(groupName ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === 'H';
+}
+
+function classificationTeamKeys(payload: TournamentCachePayload | null, excludeGroupH = false): Set<string> {
+  const out = new Set<string>();
+  for (const [groupName, rows] of Object.entries(payload?.classificacao?.grupos ?? {})) {
+    if (excludeGroupH && isAuxiliaryGroupH(groupName)) continue;
+    for (const row of Array.isArray(rows) ? rows as unknown[] : []) {
+      const name = Array.isArray(row) ? row[2] : (row as any)?.team_name ?? (row as any)?.team ?? (row as any)?.nome ?? (row as any)?.time;
+      const k = normalizeName(name);
+      if (k) out.add(k);
+    }
+  }
+  return out;
+}
+
 function teamKeys(payload: TournamentCachePayload | null): Set<string> {
   const out = new Set<string>();
   for (const row of payload?.dados_externos?.rows ?? []) {
@@ -72,9 +89,10 @@ function matchKey(round: string, home: unknown, away: unknown): string | null {
  * jogos, vitórias, empates, derrotas, saldo] no formato antigo e acrescenta
  * pontos pró antes do saldo no formato novo. Não usar os índices da Série A/B.
  */
-function countLibertadoresClassificationRows(payload: TournamentCachePayload | null): number {
+function countLibertadoresClassificationRows(payload: TournamentCachePayload | null, excludeGroupH = false): number {
   let count = 0;
-  for (const rows of Object.values(payload?.classificacao?.grupos ?? {})) {
+  for (const [groupName, rows] of Object.entries(payload?.classificacao?.grupos ?? {})) {
+    if (excludeGroupH && isAuxiliaryGroupH(groupName)) continue;
     if (!Array.isArray(rows)) continue;
     for (const row of rows as unknown[]) {
       if (!Array.isArray(row) || row.length < 9) continue;
@@ -98,8 +116,15 @@ export function buildCoverageReport(input: {
   matches: MatchInput[];
   standings: Record<string, StandingRow[]>;
 }): CoverageReport {
-  const expectedTeams = teamKeys(input.baseline);
-  const loadedTeams = teamKeys(input.generated);
+  // A Sul-Americana tem sete grupos (A–G). O grupo H legado é apenas um
+  // artefato auxiliar e não pode distorcer a cobertura deste torneio.
+  const isSulamericana = input.league === 'sulamericana';
+  const expectedTeams = isSulamericana
+    ? classificationTeamKeys(input.baseline, true)
+    : teamKeys(input.baseline);
+  const loadedTeams = isSulamericana
+    ? classificationTeamKeys(input.generated, true)
+    : teamKeys(input.generated);
   const expectedMatches = matchKeysFromPayload(input.baseline);
   const loadedMatches = new Set([
     ...matchKeysFromPayload(input.generated),
@@ -107,11 +132,12 @@ export function buildCoverageReport(input: {
   ]);
 
   const genericStandingsCount = Object.values(input.standings).reduce((n, r) => n + r.length, 0);
-  const standings_generated = input.league === 'libertadores'
-    ? countLibertadoresClassificationRows(input.generated)
+  const isContinental = input.league === 'libertadores' || isSulamericana;
+  const standings_generated = isContinental
+    ? countLibertadoresClassificationRows(input.generated, isSulamericana)
     : genericStandingsCount;
-  const standings_expected = input.league === 'libertadores'
-    ? countLibertadoresClassificationRows(input.baseline)
+  const standings_expected = isContinental
+    ? countLibertadoresClassificationRows(input.baseline, isSulamericana)
     : Object.values(input.baseline?.classificacao?.grupos ?? {}).reduce(
         (n, r) =>
           n +
