@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 interface CupMatchCardProps {
   match: ConfrontoCopa;
   badgeUrls?: Record<string, string>;
+  badgeFallbackUrls?: Record<string, string>;
   isFinal?: boolean;
   isUserTeam?: (name: string) => boolean;
   onMatchClick?: () => void;
@@ -52,13 +53,15 @@ const findBadge = (name: string, urls?: Record<string, string>) =>
   urls?.[name] || urls?.[name.toUpperCase()] || urls?.[name.toLowerCase()] || urls?.[normalizeName(name)];
 
 const CupMatchCard = ({
-  match, badgeUrls, isFinal, isUserTeam, onMatchClick, disabled,
+  match, badgeUrls, badgeFallbackUrls, isFinal, isUserTeam, onMatchClick, disabled,
   activeLeg, partialScore1, partialScore2, playedCount1, playedCount2,
 }: CupMatchCardProps) => {
   const team1Empty = !match.team1;
   const team2Empty = !match.team2;
   const team1Badge = !team1Empty ? (match.team1Badge || findBadge(match.team1, badgeUrls)) : undefined;
   const team2Badge = !team2Empty ? (match.team2Badge || findBadge(match.team2, badgeUrls)) : undefined;
+  const team1BadgeFallback = !team1Empty ? (match.team1BadgeFallback || findBadge(match.team1, badgeFallbackUrls)) : undefined;
+  const team2BadgeFallback = !team2Empty ? (match.team2BadgeFallback || findBadge(match.team2, badgeFallbackUrls)) : undefined;
   const isClickable = !!onMatchClick && !disabled;
   const showPartials = !!activeLeg;
   const cardHighlighted =
@@ -94,7 +97,10 @@ const CupMatchCard = ({
           <div className="w-10 h-10 flex items-center justify-center">
             {badge ? (
               <img src={badge} alt={teamName} className="w-10 h-10 object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                onError={(e) => {
+                if (team1BadgeFallback && e.currentTarget.src !== team1BadgeFallback) e.currentTarget.src = team1BadgeFallback;
+                else e.currentTarget.style.display = 'none';
+              }} />
             ) : (
               <div className="w-10 h-10" />
             )}
@@ -179,7 +185,10 @@ const CupMatchCard = ({
       <div className="w-6 h-6 mx-1 shrink-0 flex items-center justify-center">
         {badge && (
           <img src={badge} alt={teamName} className="w-5 h-5 object-contain"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            onError={(e) => {
+                if (team2BadgeFallback && e.currentTarget.src !== team2BadgeFallback) e.currentTarget.src = team2BadgeFallback;
+                else e.currentTarget.style.display = 'none';
+              }} />
         )}
       </div>
       {showPartials && playedCount !== undefined && (
