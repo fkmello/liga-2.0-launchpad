@@ -27,7 +27,7 @@ export function diffPayloads(
     if (
       section === 'dados_externos' &&
       options.semantic === true &&
-      (options.league === 'copa_brasil' || options.league === 'libertadores')
+      (options.league === 'copa_brasil' || options.league === 'libertadores' || options.league === 'sulamericana')
     ) {
       const semanticCurrent = canonicalTeamIdentity(current?.dados_externos);
       const semanticNext = canonicalTeamIdentity(next.dados_externos);
