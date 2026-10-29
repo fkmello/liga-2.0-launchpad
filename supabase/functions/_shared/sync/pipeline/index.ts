@@ -36,6 +36,7 @@ export interface PipelineOptions {
   persist?: boolean;
   syncedBy: string | null;
   authMode?: 'secret' | 'admin';
+  relatedPayloads?: AdapterContext['relatedPayloads'];
 }
 
 
@@ -131,6 +132,7 @@ export async function runPipeline(
           dados_externos: current.dados_externos ?? { rows: [] },
         }
       : null,
+    relatedPayloads: opts.relatedPayloads,
   };
 
   t = Date.now();
