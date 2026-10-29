@@ -217,7 +217,7 @@ function replaceCopaMatchTeams(match: CupMatch, team1: CopaEntrant, team2: CopaE
  * alimenta Final/3º lugar após a volta das duas semifinais. Não sorteia fases
  * anteriores nem substitui a chave fixa já existente.
  */
-function resolveCopaBrasil2026Final(
+export function resolveCopaBrasil2026Final(
   inputFases: CupFases,
   teams: CartolaTeamRaw[],
 ): CupFases {
