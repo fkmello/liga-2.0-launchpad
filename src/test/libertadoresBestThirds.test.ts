@@ -11,8 +11,8 @@ describe('Libertadores best third-place qualifiers', () => {
     for (let i = 0; i < 8; i++) {
       const group = `GRUPO ${String.fromCharCode(65 + i)}`;
       grupos[group] = [
-        row(`Primeiro ${i}`, 18, 6, 20, 100),
-        row(`Segundo ${i}`, 12, 4, 5, 80),
+        row(`Primeiro ${i}`, 30, 6, 20, 100),
+        row(`Segundo ${i}`, 20, 4, 5, 80),
         row(`Terceiro ${i}`, i === 7 ? 10 : 8 + i, i === 7 ? 3 : i, i, 50 + i),
         row(`Quarto ${i}`, 0, 0, -20, 10),
       ];
