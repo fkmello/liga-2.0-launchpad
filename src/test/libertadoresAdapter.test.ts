@@ -7,6 +7,15 @@ import { mergeLibertadoresFasesPreservingScores } from '../../supabase/functions
 
 const idByName = new Map([['timea', '101'], ['timeb', '102']]);
 
+function completedRoundOf16ForQuarterfinals(quarterfinals: any[]) {
+  return {
+    matches: quarterfinals.flatMap((match: any) => [
+      { team1: match.team1, team2: `Eliminado ${match.team1}`, scoreIda1: '1', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0' },
+      { team1: match.team2, team2: `Eliminado ${match.team2}`, scoreIda1: '1', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0' },
+    ]),
+  };
+}
+
 describe('Libertadores adapter', () => {
   it('preserva decisões manuais ao recalcular a classificação dos grupos', () => {
     const decisions = { grupos: { 'GRUPO A': ['Time A', 'Time B'] }, global: ['Time A', 'Time B'] };
@@ -313,9 +322,11 @@ describe('Libertadores adapter', () => {
         scoreVolta2: '70,00',
       }));
 
+    const quartas = makeMatches('Q', 4);
     const fases: any = {
+      'Oitavas de Final': completedRoundOf16ForQuarterfinals(quartas),
       'Quartas de Final': {
-        matches: makeMatches('Q', 4),
+        matches: quartas,
       },
       Semifinal: {
         matches: Array.from({ length: 2 }, () => ({
@@ -405,6 +416,7 @@ describe('Libertadores adapter', () => {
       },
     };
 
+    fases['Oitavas de Final'] = completedRoundOf16ForQuarterfinals(fases['Quartas de Final'].matches);
     const resultado = resolveLibertadoresProgression(fases, {
       grupos: {},
     });
