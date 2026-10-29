@@ -37,6 +37,8 @@ export interface PipelineOptions {
   syncedBy: string | null;
   authMode?: 'secret' | 'admin';
   relatedPayloads?: AdapterContext['relatedPayloads'];
+  /** Optional source refresh for participant rows; phases/history remain from the active cache. */
+  previousDataOverride?: { rows: unknown[] };
 }
 
 
@@ -129,7 +131,7 @@ export async function runPipeline(
       ? {
           fases: current.fases ?? {},
           classificacao: current.classificacao ?? { grupos: {} },
-          dados_externos: current.dados_externos ?? { rows: [] },
+          dados_externos: opts.previousDataOverride ?? current.dados_externos ?? { rows: [] },
         }
       : null,
     relatedPayloads: opts.relatedPayloads,
