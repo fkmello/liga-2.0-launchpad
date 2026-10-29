@@ -489,7 +489,10 @@ export function resolveLibertadoresProgression(
     const targetPhase = next?.[target];
     const expectedSourceMatches = source === 'Oitavas de Final' ? 8 : 4;
     if (!Array.isArray(sourceMatches) || !Array.isArray(targetPhase?.matches) ||
-        sourceMatches.length !== expectedSourceMatches) continue;
+        sourceMatches.length !== expectedSourceMatches) {
+      progressionBlocked = true;
+      break;
+    }
     const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
     if (winners.some((winner: any) => !winner)) {
       progressionBlocked = true;
