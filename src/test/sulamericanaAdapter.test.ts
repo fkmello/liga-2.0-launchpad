@@ -64,6 +64,25 @@ describe('Sul-Americana progression', () => {
     expect(result['Quartas de Final'].matches[0].team2).toBe('Oitavas A1');
   });
 
+  it('honors a manually selected winner even when a score field is missing', () => {
+    const fases: any = {
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
+        team1: 'Oitavas A' + i, team2: 'Oitavas B' + i,
+        scoreIda1: i === 0 ? '' : '90,00',
+        scoreIda2: i === 0 ? '' : '70,00',
+        scoreVolta1: i === 0 ? '' : '80,00',
+        scoreVolta2: i === 0 ? '' : '75,00',
+        ...(i === 0 ? { manualWinner: 'Oitavas B0' } : {}),
+      })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, () => ({ team1: '', team2: '' })) },
+      Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: '', team2: '' })) },
+      Final: { matches: [{ matchNumber: 'FINAL', team1: '', team2: '' }, { matchNumber: '3º LUGAR', team1: '', team2: '' }] },
+    };
+    const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
+    expect(result['Quartas de Final'].matches[0].team1).toBe('Oitavas B0');
+    expect(result['Quartas de Final'].matches[0].team2).toBe('Oitavas A1');
+  });
+
   it('waits for every round-of-16 confrontation before advancing any team', () => {
     const fases: any = {
       'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
