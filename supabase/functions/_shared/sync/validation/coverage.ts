@@ -21,6 +21,24 @@ function normalizeName(s: unknown): string {
     .toLowerCase();
 }
 
+function isAuxiliaryGroupH(groupName: unknown): boolean {
+  const normalized = normalizeName(groupName).toUpperCase();
+  return normalized === 'H' || normalized === 'GRUPOH';
+}
+
+function classificationTeamKeys(payload: TournamentCachePayload | null, excludeGroupH = false): Set<string> {
+  const out = new Set<string>();
+  for (const [groupName, rows] of Object.entries(payload?.classificacao?.grupos ?? {})) {
+    if (excludeGroupH && isAuxiliaryGroupH(groupName)) continue;
+    for (const row of Array.isArray(rows) ? rows as unknown[] : []) {
+      const name = Array.isArray(row) ? row[2] : (row as any)?.team_name ?? (row as any)?.team ?? (row as any)?.nome ?? (row as any)?.time;
+      const k = normalizeName(name);
+      if (k) out.add(k);
+    }
+  }
+  return out;
+}
+
 function teamKeys(payload: TournamentCachePayload | null): Set<string> {
   const out = new Set<string>();
   for (const row of payload?.dados_externos?.rows ?? []) {
@@ -33,20 +51,26 @@ function teamKeys(payload: TournamentCachePayload | null): Set<string> {
 
 function matchKeysFromPayload(payload: TournamentCachePayload | null): Set<string> {
   const out = new Set<string>();
-  for (const [faseKey, fase] of Object.entries<any>(payload?.fases ?? {})) {
-    for (const m of fase?.matches ?? fase?.confrontos ?? []) {
-      const k = matchKey(faseKey, m.team1 ?? m.home, m.team2 ?? m.away);
-      if (k) out.add(k);
-    }
-    // Fases aninhadas (ex.: fase_grupos → rodada_X)
-    if (fase && !Array.isArray(fase.matches)) {
-      for (const [sub, subFase] of Object.entries<any>(fase ?? {})) {
-        for (const m of subFase?.matches ?? []) {
-          const k = matchKey(`${faseKey}.${sub}`, m.team1 ?? m.home, m.team2 ?? m.away);
-          if (k) out.add(k);
-        }
+
+  const visit = (value: any, path: string, depth = 0): void => {
+    if (!value || typeof value !== 'object' || depth > 8) return;
+    const directMatches = value.matches ?? value.confrontos;
+    if (Array.isArray(directMatches)) {
+      for (const match of directMatches) {
+        const key = matchKey(path, match?.team1 ?? match?.home, match?.team2 ?? match?.away);
+        if (key) out.add(key);
       }
     }
+    // A Sul-Americana legada pode aninhar jogos como fase → rodada → grupo → matches.
+    // Percorre estruturas conhecidas sem depender de um formato único de cache.
+    for (const [childKey, child] of Object.entries(value)) {
+      if (childKey === 'matches' || childKey === 'confrontos') continue;
+      if (child && typeof child === 'object') visit(child, `${path}.${childKey}`, depth + 1);
+    }
+  };
+
+  for (const [faseKey, fase] of Object.entries<any>(payload?.fases ?? {})) {
+    visit(fase, faseKey);
   }
   return out;
 }
@@ -68,32 +92,67 @@ function matchKey(round: string, home: unknown, away: unknown): string | null {
 }
 
 /**
+ * A Libertadores usa uma matriz própria: [posição, vazio, equipe, pontos,
+ * jogos, vitórias, empates, derrotas, saldo] no formato antigo e acrescenta
+ * pontos pró antes do saldo no formato novo. Não usar os índices da Série A/B.
+ */
+function countLibertadoresClassificationRows(payload: TournamentCachePayload | null, excludeGroupH = false): number {
+  let count = 0;
+  for (const [groupName, rows] of Object.entries(payload?.classificacao?.grupos ?? {})) {
+    if (excludeGroupH && isAuxiliaryGroupH(groupName)) continue;
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows as unknown[]) {
+      if (!Array.isArray(row) || row.length < 9) continue;
+      const team = String(row[2] ?? '').trim();
+      const pointsText = String(row[3] ?? '').trim();
+      const points = Number(pointsText.replace(',', '.'));
+      if (team && pointsText && Number.isFinite(points)) count++;
+    }
+  }
+  return count;
+}
+
+/**
  * Relatório de cobertura: identifica rapidamente se algum dado deixou de ser
  * carregado pela API, antes mesmo de comparar payloads. Auditoria apenas.
  */
 export function buildCoverageReport(input: {
+  league?: string;
   baseline: TournamentCachePayload | null;
   generated: TournamentCachePayload;
   matches: MatchInput[];
   standings: Record<string, StandingRow[]>;
 }): CoverageReport {
-  const expectedTeams = teamKeys(input.baseline);
-  const loadedTeams = teamKeys(input.generated);
+  // A Sul-Americana tem sete grupos (A–G). O grupo H legado é apenas um
+  // artefato auxiliar e não pode distorcer a cobertura deste torneio.
+  const isSulamericana = input.league === 'sulamericana';
+  const expectedTeams = isSulamericana
+    ? classificationTeamKeys(input.baseline, true)
+    : teamKeys(input.baseline);
+  const loadedTeams = isSulamericana
+    ? classificationTeamKeys(input.generated, true)
+    : teamKeys(input.generated);
   const expectedMatches = matchKeysFromPayload(input.baseline);
   const loadedMatches = new Set([
     ...matchKeysFromPayload(input.generated),
     ...matchKeysFromMatches(input.matches),
   ]);
 
-  const standings_generated = Object.values(input.standings).reduce((n, r) => n + r.length, 0);
-  const standings_expected = Object.values(input.baseline?.classificacao?.grupos ?? {}).reduce(
-    (n, r) =>
-      n +
-      (Array.isArray(r)
-        ? r.filter((row) => (Array.isArray(row) ? isLegacyStandingsTeamRow(row) : !!row)).length
-        : 0),
-    0,
-  );
+  const genericStandingsCount = Object.values(input.standings).reduce((n, r) => n + r.length, 0);
+  const isContinental = input.league === 'libertadores' || isSulamericana;
+  const standings_generated = isContinental
+    ? countLibertadoresClassificationRows(input.generated, isSulamericana)
+    : genericStandingsCount;
+  const standings_expected = isContinental
+    ? countLibertadoresClassificationRows(input.baseline, isSulamericana)
+    : Object.values(input.baseline?.classificacao?.grupos ?? {}).reduce(
+        (n, r) =>
+          n +
+          (Array.isArray(r)
+            ? r.filter((row) => (Array.isArray(row) ? isLegacyStandingsTeamRow(row) : !!row)).length
+            : 0),
+        0,
+      );
 
   return {
     teams_expected: expectedTeams.size,

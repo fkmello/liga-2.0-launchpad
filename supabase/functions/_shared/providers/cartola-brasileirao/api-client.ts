@@ -6,6 +6,8 @@ export interface CartolaTeamRaw {
   id_cartola: string;
   nome: string;
   escudo: string | null;
+  /** PNG fallback when the preferred SVG URL fails to load in a browser. */
+  escudoFallback?: string | null;
 }
 
 export interface CartolaMercadoStatus {
@@ -25,6 +27,7 @@ export async function fetchCartolaTeam(id: string): Promise<CartolaTeamRaw | nul
       // Preferir SVG: em testes reais ele foi mais confiável para o uso na planilha.
       // PNG fica como fallback caso a API não forneça o SVG.
       escudo: time.url_escudo_svg ?? time.url_escudo_png ?? null,
+      escudoFallback: time.url_escudo_png ?? null,
     };
   } catch (_e) {
     return null;

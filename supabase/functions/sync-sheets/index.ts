@@ -209,13 +209,28 @@ async function parseCopaBaseDados(accessToken: string, spreadsheetId: string) {
   const headerRow = preValues[0] || fase2Values[0] || [];
   const preRows = preValues.length > 1 ? preValues.slice(1) : [];
   const fase2Rows = fase2Values.length > 1 ? fase2Values.slice(1) : [];
-  const merged = new Map<string, string[]>();
-  for (const row of preRows) if (row[0]) merged.set(row[0].trim().toLowerCase(), row);
-  for (const row of fase2Rows) if (row[0]) merged.set(row[0].trim().toLowerCase(), row);
-  const values = [headerRow, ...merged.values()];
-  return { headers: values.length > 0 ? values[0] : [], rows: values.length > 1 ? values.slice(1) : [], raw: values };
-}
 
+  // Preserve the source tab as metadata so the new-season draw can distinguish
+  // the 56 preliminary entrants from the four invited teams. Keep deduplication,
+  // but key by Cartola ID when available so renaming a team does not create a
+  // duplicate roster entry. Existing tab names remain unchanged.
+  const merged = new Map<string, string[]>();
+  const addRows = (sourceRows: string[][], role: 'preliminar' | 'convidado') => {
+    for (const row of sourceRows) {
+      if (!row?.some((cell) => String(cell ?? '').trim() !== '')) continue;
+      const first = String(row[0] ?? '').trim();
+      const second = String(row[1] ?? '').trim();
+      const id = /^\d{3,}$/.test(second) ? second : /^\d{3,}$/.test(first) ? first : '';
+      const key = id ? `id:${id}` : `name:${first.toLowerCase()}`;
+      merged.set(key, [row[0] ?? '', row[1] ?? '', row[2] ?? '', role]);
+    }
+  };
+  addRows(preRows, 'preliminar');
+  addRows(fase2Rows, 'convidado');
+  const headers = [...headerRow, 'origem_interna'];
+  const rows = [...merged.values()];
+  return { headers, rows, raw: [headers, ...rows] };
+}
 // Libertadores / Sulamericana classificacao
 async function parseLibertadoresClassificacao(accessToken: string, spreadsheetId: string, isSulamericana: boolean) {
   const values = await fetchSheetRange(accessToken, spreadsheetId, `'FASE DE GRUPOS'!A1:Y100`);

@@ -124,9 +124,14 @@ Deno.serve(async (req) => {
 
     // ── Destino de escrita: registry manda; `shadow=false` é privilégio de admin ──
     const shadowParam = url.searchParams.get('shadow');
-    if (shadowParam !== null && authMode !== 'admin') {
+    const trustedCronOfficialWrite =
+      authMode === 'secret' &&
+      shadowParam === 'false' &&
+      baseDef.persistMode === 'official' &&
+      baseDef.cron?.allowOfficialPersistence === true;
+    if (shadowParam !== null && authMode !== 'admin' && !trustedCronOfficialWrite) {
       return json(
-        { error: 'Parâmetro "shadow" é restrito a administradores autenticados' },
+        { error: 'Parâmetro "shadow" é restrito a administradores autenticados ou cron explicitamente autorizado' },
         403,
       );
     }
@@ -141,19 +146,88 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Shadow é o padrão seguro; só sai dele com persistMode='official' + admin.
-    const shadow = !(baseDef.persistMode === 'official' && authMode === 'admin' && shadowParam === 'false');
+    // Shadow é o padrão seguro; cache oficial exige persistMode='official' e admin ou cron explicitamente autorizado.
+    const shadow = !(baseDef.persistMode === 'official' && shadowParam === 'false' && (authMode === 'admin' || trustedCronOfficialWrite));
 
     const key = shadowKey(baseDef.league, resolvedSeason);
     const def = shadow ? { ...baseDef, cacheKey: () => key } : baseDef;
-    const repo = shadow
+    const legacyReader = createSupabaseLegacyReader(supabaseAdmin);
+    const repoBase = shadow
       ? createShadowRepository({
           supabaseAdmin,
           league: baseDef.league,
           season: resolvedSeason,
-          legacyReader: createSupabaseLegacyReader(supabaseAdmin),
+          legacyReader,
         })
       : createSheetsCacheRepository(supabaseAdmin);
+
+    // When first promoting Sul-Americana to official storage, seed the pipeline's
+    // previous payload from its validated shadow cache if no official cache exists.
+    // Saving still goes only through the official repository and its normal validation.
+    const sulamericanaShadowBaseline = !shadow && baseDef.league === 'sulamericana'
+      ? createShadowRepository({
+          supabaseAdmin,
+          league: baseDef.league,
+          season: resolvedSeason,
+          legacyReader,
+        })
+      : null;
+    const repo = sulamericanaShadowBaseline
+      ? {
+          ...repoBase,
+          async load(cacheKey: string) {
+            const officialPayload = await repoBase.load(cacheKey);
+            if (officialPayload) return officialPayload;
+            return await sulamericanaShadowBaseline.load(shadowKey(baseDef.league, resolvedSeason));
+          },
+        }
+      : repoBase;
+
+    // Sul-Americana reads the Libertadores shadow payload read-only to import
+    // its two best third-place qualifiers. No cross-tournament write is performed.
+    const relatedPayloads: Record<string, any> = {};
+    if (baseDef.league === 'sulamericana') {
+      const libertadoresRepo = createShadowRepository({
+        supabaseAdmin,
+        league: 'libertadores',
+        season: resolvedSeason,
+        legacyReader: createSupabaseLegacyReader(supabaseAdmin),
+      });
+      relatedPayloads.libertadores = await libertadoresRepo.load(shadowKey('libertadores', resolvedSeason));
+    }
+
+    // For the new Copa do Brasil season, refresh only participant rows from the
+    // spreadsheet cache. Keep the active API cache's phases/history untouched.
+    let previousDataOverride: { rows: unknown[] } | undefined;
+    if (baseDef.league === 'copa_brasil' && resolvedSeason >= 2027) {
+      const legacyCopa = await legacyReader('copa:brasil');
+      const sourceRows = legacyCopa?.dados_externos?.rows;
+      const ids = Array.isArray(sourceRows)
+        ? sourceRows.map((row: any) => {
+            const cells = Array.isArray(row) ? row : [row?.id_cartola ?? row?.id];
+            const candidate = cells[1] && /^\d{3,}$/.test(String(cells[1]).trim())
+              ? cells[1]
+              : cells.find((cell: unknown) => /^\d{3,}$/.test(String(cell ?? '').trim()));
+            return candidate === undefined ? '' : String(candidate).trim();
+          })
+        : [];
+      const preliminaryCount = Array.isArray(sourceRows)
+        ? sourceRows.filter((row: any) => String(Array.isArray(row) ? row[3] ?? '' : row?.role ?? '').toLowerCase().includes('prelim')).length
+        : 0;
+      const invitedCount = Array.isArray(sourceRows)
+        ? sourceRows.filter((row: any) => String(Array.isArray(row) ? row[3] ?? '' : row?.role ?? '').toLowerCase().includes('convid')).length
+        : 0;
+      // Fail closed: require the complete roster and source-tab markers before replacing
+      // participant rows. This prevents a stale/partial import from changing the draw.
+      if (Array.isArray(sourceRows) && sourceRows.length === 60 && ids.every(Boolean) &&
+          new Set(ids).size === 60 && preliminaryCount === 56 && invitedCount === 4) {
+        previousDataOverride = { rows: sourceRows };
+      } else {
+        throw new Error(
+          '[copa_brasil] sincronização bloqueada: importe a planilha com 56 participantes preliminares e 4 convidados (60 IDs Cartola únicos) antes de sincronizar a temporada 2027+',
+        );
+      }
+    }
 
     const result = await runPipeline(def, resolvedSeason, scope, repo, {
       dryRun,
@@ -161,6 +235,8 @@ Deno.serve(async (req) => {
       persist,
       syncedBy,
       authMode,
+      relatedPayloads,
+      previousDataOverride,
     });
 
 

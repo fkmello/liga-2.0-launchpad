@@ -24,3 +24,6 @@ export const USE_CONSOLIDATED_SERIE_C = true;
 
 /** Libertadores: false mantém a leitura oficial/manual da planilha; true lê o payload shadow da sincronização automática. */
 export const USE_CONSOLIDATED_LIBERTADORES = true;
+
+/** Sul-Americana: lê o payload shadow da sincronização Cartola API, com fallback legado enquanto o cache não existir. */
+export const USE_CONSOLIDATED_SULAMERICANA = true;

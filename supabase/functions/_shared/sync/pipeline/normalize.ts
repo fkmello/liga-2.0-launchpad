@@ -30,7 +30,11 @@ export function normalizeTournamentData(
     if (fases) result.fases = { ...result.fases, ...fases };
     const classificacao = adapter.toClassificacao?.(raw, ctx);
     if (classificacao?.grupos && Object.keys(classificacao.grupos).length) {
-      result.classificacao = { grupos: { ...result.classificacao.grupos, ...classificacao.grupos } };
+      result.classificacao = {
+        ...result.classificacao,
+        ...classificacao,
+        grupos: { ...result.classificacao.grupos, ...classificacao.grupos },
+      };
     }
     const dados = adapter.toDadosExternos?.(raw, ctx);
     if (dados?.rows?.length) result.dados_externos = dados;
@@ -39,4 +43,18 @@ export function normalizeTournamentData(
   }
 
   return result;
+}
+
+
+/**
+ * Aplica a classificação calculada sem descartar metadados da classificação
+ * normalizada, como desempates manuais persistidos no cache shadow.
+ */
+export function mergeCalculatedStandings(
+  classification: NormalizedTournamentData['classificacao'],
+  groups: Record<string, unknown[]>,
+): NormalizedTournamentData['classificacao'] {
+  return Object.keys(groups).length
+    ? { ...classification, grupos: groups }
+    : classification;
 }

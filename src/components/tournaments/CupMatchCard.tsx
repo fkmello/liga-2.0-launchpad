@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 interface CupMatchCardProps {
   match: ConfrontoCopa;
   badgeUrls?: Record<string, string>;
+  badgeFallbackUrls?: Record<string, string>;
   isFinal?: boolean;
   isUserTeam?: (name: string) => boolean;
   onMatchClick?: () => void;
@@ -52,13 +53,15 @@ const findBadge = (name: string, urls?: Record<string, string>) =>
   urls?.[name] || urls?.[name.toUpperCase()] || urls?.[name.toLowerCase()] || urls?.[normalizeName(name)];
 
 const CupMatchCard = ({
-  match, badgeUrls, isFinal, isUserTeam, onMatchClick, disabled,
+  match, badgeUrls, badgeFallbackUrls, isFinal, isUserTeam, onMatchClick, disabled,
   activeLeg, partialScore1, partialScore2, playedCount1, playedCount2,
 }: CupMatchCardProps) => {
   const team1Empty = !match.team1;
   const team2Empty = !match.team2;
-  const team1Badge = !team1Empty ? findBadge(match.team1, badgeUrls) : undefined;
-  const team2Badge = !team2Empty ? findBadge(match.team2, badgeUrls) : undefined;
+  const team1Badge = !team1Empty ? (match.team1Badge || findBadge(match.team1, badgeUrls)) : undefined;
+  const team2Badge = !team2Empty ? (match.team2Badge || findBadge(match.team2, badgeUrls)) : undefined;
+  const team1BadgeFallback = !team1Empty ? (match.team1BadgeFallback || findBadge(match.team1, badgeFallbackUrls)) : undefined;
+  const team2BadgeFallback = !team2Empty ? (match.team2BadgeFallback || findBadge(match.team2, badgeFallbackUrls)) : undefined;
   const isClickable = !!onMatchClick && !disabled;
   const showPartials = !!activeLeg;
   const cardHighlighted =
@@ -85,7 +88,7 @@ const CupMatchCard = ({
       ? formatPartial(partialScore2)
       : (match.scoreIda2 || '-');
 
-    const renderTeamBlock = (teamName: string, isEmpty: boolean, badge: string | undefined, playedCount?: number, side?: 'left' | 'right') => (
+    const renderTeamBlock = (teamName: string, isEmpty: boolean, badge: string | undefined, badgeFallback: string | undefined, playedCount?: number, side?: 'left' | 'right') => (
       <div className="flex flex-col items-center w-20">
         <div className="flex items-center gap-1">
           {side === 'left' && showPartials && playedCount !== undefined && (
@@ -94,7 +97,10 @@ const CupMatchCard = ({
           <div className="w-10 h-10 flex items-center justify-center">
             {badge ? (
               <img src={badge} alt={teamName} className="w-10 h-10 object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                onError={(e) => {
+                if (badgeFallback && e.currentTarget.src !== badgeFallback) e.currentTarget.src = badgeFallback;
+                else e.currentTarget.style.display = 'none';
+              }} />
             ) : (
               <div className="w-10 h-10" />
             )}
@@ -117,18 +123,29 @@ const CupMatchCard = ({
           </span>
         </div>
         <div className="flex items-center justify-center gap-3">
-          {renderTeamBlock(match.team1, team1Empty, team1Badge, playedCount1, 'left')}
+          {renderTeamBlock(match.team1, team1Empty, team1Badge, team1BadgeFallback, playedCount1, 'left')}
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-foreground min-w-[1.25rem] text-center">
               {team1Empty ? '' : score1}
+              {match.manualWinner && match.manualPenaltyScore1 != null && (
+                <span className="ml-1 text-sm text-emerald-300">({match.manualPenaltyScore1})</span>
+              )}
             </span>
             <span className="text-sm text-muted-foreground font-medium">x</span>
             <span className="text-lg font-bold text-foreground min-w-[1.25rem] text-center">
               {team2Empty ? '' : score2}
+              {match.manualWinner && match.manualPenaltyScore2 != null && (
+                <span className="ml-1 text-sm text-emerald-300">({match.manualPenaltyScore2})</span>
+              )}
             </span>
           </div>
-          {renderTeamBlock(match.team2, team2Empty, team2Badge, playedCount2, 'right')}
+          {renderTeamBlock(match.team2, team2Empty, team2Badge, team2BadgeFallback, playedCount2, 'right')}
         </div>
+        {match.manualWinner && (
+          <div className="mt-2 text-center text-[10px] font-medium text-emerald-300">
+            Classificado nos pênaltis: {match.manualWinner}
+          </div>
+        )}
       </div>
     );
   }
@@ -146,11 +163,13 @@ const CupMatchCard = ({
     teamName: string,
     isEmpty: boolean,
     badge: string | undefined,
+    badgeFallback: string | undefined,
     scoreIda: string,
     scoreVolta: string,
     total: string,
     partial?: number,
     playedCount?: number,
+    penaltyScore?: number | null,
   ) => (
     <div className="flex items-center justify-center">
       <div className="w-32 shrink-0 min-w-0">
@@ -167,7 +186,10 @@ const CupMatchCard = ({
       <div className="w-6 h-6 mx-1 shrink-0 flex items-center justify-center">
         {badge && (
           <img src={badge} alt={teamName} className="w-5 h-5 object-contain"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            onError={(e) => {
+                if (badgeFallback && e.currentTarget.src !== badgeFallback) e.currentTarget.src = badgeFallback;
+                else e.currentTarget.style.display = 'none';
+              }} />
         )}
       </div>
       {showPartials && playedCount !== undefined && (
@@ -186,7 +208,10 @@ const CupMatchCard = ({
         </span>
       </div>
       <div className="w-16 shrink-0 text-center">
-        <span className="text-sm font-bold text-primary">{isEmpty ? '' : total}</span>
+        <span className="text-sm font-bold text-primary">
+          {isEmpty ? '' : total}
+          {match.manualWinner && penaltyScore != null && <span className="ml-1 text-emerald-300">({penaltyScore})</span>}
+        </span>
       </div>
     </div>
   );
@@ -212,9 +237,14 @@ const CupMatchCard = ({
           <span className="text-[10px] font-semibold text-muted-foreground">TOTAL</span>
         </div>
       </div>
-      {renderTeamRow(match.team1, team1Empty, team1Badge, match.scoreIda1, match.scoreVolta1, total1, partialScore1, playedCount1)}
+      {renderTeamRow(match.team1, team1Empty, team1Badge, team1BadgeFallback, match.scoreIda1, match.scoreVolta1, total1, partialScore1, playedCount1, match.manualPenaltyScore1)}
       <div className="border-t border-primary/10 mx-4" />
-      {renderTeamRow(match.team2, team2Empty, team2Badge, match.scoreIda2, match.scoreVolta2, total2, partialScore2, playedCount2)}
+      {renderTeamRow(match.team2, team2Empty, team2Badge, team2BadgeFallback, match.scoreIda2, match.scoreVolta2, total2, partialScore2, playedCount2, match.manualPenaltyScore2)}
+      {match.manualWinner && (
+        <div className="pt-1 text-center text-[10px] font-medium text-emerald-300">
+          Classificado nos pênaltis: {match.manualWinner}
+        </div>
+      )}
     </div>
   );
 };

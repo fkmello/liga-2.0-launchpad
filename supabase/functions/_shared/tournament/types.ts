@@ -17,9 +17,15 @@ export interface AdapterContext {
   /** Conteúdo atual do cache, injetado pelo pipeline (adapters não leem o banco). */
   previous?: {
     fases: Record<string, unknown>;
-    classificacao: { grupos: Record<string, unknown[]> };
+    classificacao: { grupos: Record<string, unknown[]>; [key: string]: unknown };
     dados_externos: { rows: unknown[] };
   } | null;
+  /** Read-only payloads from related tournaments needed for cross-competition qualification. */
+  relatedPayloads?: Record<string, {
+    fases: Record<string, unknown>;
+    classificacao: { grupos: Record<string, unknown[]>; [key: string]: unknown };
+    dados_externos: { rows: unknown[] };
+  } | null>;
 }
 
 export interface TournamentAdapter<Raw = unknown> {
@@ -28,7 +34,7 @@ export interface TournamentAdapter<Raw = unknown> {
   source_type: SourceType;
   fetchRaw(ctx: AdapterContext): Promise<Raw>;
   toFases?(raw: Raw, ctx: AdapterContext): Record<string, unknown>;
-  toClassificacao?(raw: Raw, ctx: AdapterContext): { grupos: Record<string, unknown[]> };
+  toClassificacao?(raw: Raw, ctx: AdapterContext): { grupos: Record<string, unknown[]>; [key: string]: unknown };
   toDadosExternos?(raw: Raw, ctx: AdapterContext): { rows: unknown[] };
   toMatches?(raw: Raw, ctx: AdapterContext): MatchInput[];
 }
@@ -50,6 +56,8 @@ export interface TournamentCronConfig {
   secondSyncDelayMinutes?: number;
   /** Rodadas-alvo da API Cartola aceitas pelo adaptador; ausente = todas (ex.: Brasileirão). */
   syncableTargetRounds?: number[];
+  /** Allows this tournament's trusted cron secret to write official cache. */
+  allowOfficialPersistence?: boolean;
 }
 
 export interface TournamentDefinition {

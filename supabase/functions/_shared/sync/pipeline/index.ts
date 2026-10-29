@@ -1,5 +1,5 @@
 import { fetchStep } from './fetch.ts';
-import { normalizeTournamentData } from './normalize.ts';
+import { mergeCalculatedStandings, normalizeTournamentData } from './normalize.ts';
 import { standingsStep } from './standings.ts';
 import { logSync } from './log.ts';
 import { fetchJsonWithRetry } from '../http.ts';
@@ -10,9 +10,9 @@ import {
   validateTournamentPayload,
 } from '../../cache/payload.ts';
 import { diffPayloads } from '../../cache/diff.ts';
-import { resolveCompareStatus, type CompareStatus } from '../../cache/compareStatus.ts';
+import { resolveSemanticCompareStatus, type CompareStatus } from '../../cache/compareStatus.ts';
 import { buildCoverageReport, type CoverageReport } from '../validation/coverage.ts';
-import { diffStandings, type StandingsDivergence } from '../validation/standingsDiff.ts';
+import { diffLibertadoresClassification, diffStandings, type StandingsDivergence } from '../validation/standingsDiff.ts';
 import type { CacheRepository } from '../../cache/repository.ts';
 import type {
   AdapterContext,
@@ -36,6 +36,9 @@ export interface PipelineOptions {
   persist?: boolean;
   syncedBy: string | null;
   authMode?: 'secret' | 'admin';
+  relatedPayloads?: AdapterContext['relatedPayloads'];
+  /** Optional source refresh for participant rows; phases/history remain from the active cache. */
+  previousDataOverride?: { rows: unknown[] };
 }
 
 
@@ -128,9 +131,10 @@ export async function runPipeline(
       ? {
           fases: current.fases ?? {},
           classificacao: current.classificacao ?? { grupos: {} },
-          dados_externos: current.dados_externos ?? { rows: [] },
+          dados_externos: opts.previousDataOverride ?? current.dados_externos ?? { rows: [] },
         }
       : null,
+    relatedPayloads: opts.relatedPayloads,
   };
 
   t = Date.now();
@@ -144,9 +148,10 @@ export async function runPipeline(
   t = Date.now();
   const grupos = standingsStep(def, normalized.matches);
   mark('standings', t);
-  const classificacao = Object.keys(grupos).length
-    ? { grupos: grupos as unknown as Record<string, unknown[]> }
-    : normalized.classificacao;
+  const classificacao = mergeCalculatedStandings(
+    normalized.classificacao,
+    grupos as unknown as Record<string, unknown[]>,
+  );
 
   t = Date.now();
   const primary = adapters[0];
@@ -164,34 +169,36 @@ export async function runPipeline(
 
   const comparison = diffPayloads(current, payload, {
     league: def.league,
-    semantic: def.league === 'libertadores' || (def.league === 'copa_brasil' && opts.compare === true),
+    semantic: def.league === 'libertadores' || def.league === 'sulamericana' || (def.league === 'copa_brasil' && opts.compare === true),
   });
   const fields = Object.keys(comparison.diff);
-  const status = resolveCompareStatus(fields);
 
   base.payload = payload;
   base.changed = comparison.changed;
   base.diff = comparison.diff;
   base.identical = !comparison.changed;
-  base.compare_status = status.status;
   base.differences_count = fields.length;
   base.fields_differing = fields;
   base.hash_atual = current?.metadata?.hash ?? '';
   base.hash_novo = payload.metadata?.hash ?? '';
   base.coverage = buildCoverageReport({
+    league: def.league,
     baseline: current,
     generated: payload,
     matches: normalized.matches,
     standings: grupos,
   });
-  base.standings_divergences = diffStandings(current, grupos);
+  base.standings_divergences = def.league === 'libertadores'
+    ? diffLibertadoresClassification(current, payload.classificacao)
+    : def.league === 'sulamericana'
+      ? diffLibertadoresClassification(current, payload.classificacao, ['H', 'GRUPO H'])
+      : diffStandings(current, grupos);
 
-  // Auditoria: 'classificacao' difere estruturalmente (matriz da planilha vs
-  // objeto calculado). Sem divergências funcionais, isso não é um erro.
-  if (base.standings_divergences.length === 0 && fields.includes('classificacao')) {
-    const structural = resolveCompareStatus(fields.filter((f) => f !== 'classificacao'));
-    base.compare_status = structural.status;
-  }
+  // Diferença estrutural sem divergência esportiva é WARNING, nunca MATCH.
+  base.compare_status = resolveSemanticCompareStatus(
+    fields,
+    base.standings_divergences.length > 0,
+  ).status;
   if (opts.compare) base.current = current;
 
   const canPersist = validation.valid && opts.persist === true && !opts.dryRun && !opts.compare;

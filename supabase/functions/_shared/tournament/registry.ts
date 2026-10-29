@@ -5,6 +5,7 @@ import { cartolaBrasileiraoAdapter } from '../providers/cartola-brasileirao/adap
 import { cartolaBrasileiraoSerieBAdapter } from '../providers/cartola-brasileirao/adapter-serie-b.ts';
 import { cartolaBrasileiraoSerieCAdapter } from '../providers/cartola-brasileirao/adapter-serie-c.ts';
 import { cartolaLibertadoresAdapter, LIBERTADORES_SYNCABLE_TARGET_ROUNDS } from '../providers/cartola-brasileirao/adapter-libertadores.ts';
+import { cartolaSulamericanaAdapter, LIBERTADORES_SYNCABLE_TARGET_ROUNDS as SULAMERICANA_SYNCABLE_TARGET_ROUNDS } from '../providers/cartola-brasileirao/adapter-sulamericana.ts';
 
 /**
  * Registry = única fonte de verdade. Nenhum cache_key, season, version ou
@@ -51,6 +52,14 @@ const DEFINITIONS: Record<string, TournamentDefinition> = {
     adapterPrecedence: { cartola_brasileirao_libertadores_v1: 10 },
     // Ativação manual após validar o payload shadow; evita gravações automáticas prematuras.
     cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: LIBERTADORES_SYNCABLE_TARGET_ROUNDS },
+  },
+  sulamericana: {
+    league: 'sulamericana', currentSeason: 2026, activeSync: 'api', persistMode: 'official',
+    cacheKey: (season) => `sulamericana:${season}`, cacheType: 'sulamericana', version: 1, schema_version: 1,
+    standingsPreset: 'CBF', mergeableKeys: [], adapters: [cartolaSulamericanaAdapter],
+    adapterPrecedence: { cartola_brasileirao_sulamericana_v1: 10 },
+    // Official writes require an authenticated admin with shadow=false; machine/cron calls remain in shadow mode.
+    cron: { enabled: true, statusProvider: 'cartola', firstSyncDelayMinutes: 15, firstSyncWindowMinutes: 30, secondSyncDelayMinutes: 60, syncableTargetRounds: SULAMERICANA_SYNCABLE_TARGET_ROUNDS, allowOfficialPersistence: true },
   },
   brasileirao_serie_b: {
     league: 'brasileirao_serie_b', currentSeason: 2026, activeSync: 'api', persistMode: 'shadow',

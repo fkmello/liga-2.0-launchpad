@@ -1,6 +1,12 @@
 import { useTournamentFinished } from '@/hooks/useTournamentFinished';
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { DEFAULT_SEASON, getTournamentCacheKey } from '@/config/tournamentCacheKeys';
+import { applyManualLibertadoresWinner } from '@/utils/applyManualLibertadoresWinner';
+import { isUnresolvedLibertadoresKnockoutTie } from '@/utils/libertadoresKnockoutTie';
 import { Trophy, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -61,6 +67,10 @@ interface SulamericanaViewProps {
 const SulamericanaView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase, initialRodadaGrupos }: SulamericanaViewProps) => {
   const { finished } = useTournamentFinished(slug);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
+  const [savingManualDecision, setSavingManualDecision] = useState(false);
+  const [manualDecisionError, setManualDecisionError] = useState<string | null>(null);
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
   const hasInitialGroupRoundFromUrl = initialFase === 'Fase de Grupos' && initialRodadaGrupos !== undefined;
@@ -204,6 +214,34 @@ const SulamericanaView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
   const findBadge = (name: string) =>
     badgeUrls[name] || badgeUrls[name.toUpperCase()] || badgeUrls[name.toLowerCase()] || badgeUrls[normalizeName(name)];
+
+  const saveManualWinner = async (phaseName: string, matchNumber: string, winner: string) => {
+    if (!isAdmin || savingManualDecision || !winner) return;
+    setSavingManualDecision(true);
+    setManualDecisionError(null);
+    try {
+      const cacheKey = getTournamentCacheKey('sulamericana', DEFAULT_SEASON);
+      const { data: row, error: readError } = await supabase
+        .from('sheets_cache')
+        .select('data')
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Sul-Americana.');
+      const payload = applyManualLibertadoresWinner(row.data as any, phaseName, matchNumber, winner);
+      const { error: saveError } = await supabase
+        .from('sheets_cache')
+        .update({ data: payload })
+        .eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-sulamericana'] });
+    } catch (error) {
+      setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate.');
+    } finally {
+      setSavingManualDecision(false);
+    }
+  };
+
 
   const getPositionColor = (position: number, totalTeams: number) => {
     if (position >= 1 && position <= 2) return 'text-emerald-400';
@@ -397,6 +435,28 @@ const SulamericanaView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           })
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">Nenhum confronto encontrado para esta fase.</p>
+        )}
+        {knockoutData.matches.some((match: any) => isUnresolvedLibertadoresKnockoutTie(match, fase)) && (
+          <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-sm font-semibold text-amber-200">Desempate manual necessário</p>
+            <p className="text-xs text-muted-foreground">Há confronto empatado no agregado. Um administrador deve registrar o vencedor do sorteio; a decisão será salva no cache shadow da Sul-Americana e preservada pela sincronização.</p>
+            {knockoutData.matches.filter((match: any) => isUnresolvedLibertadoresKnockoutTie(match, fase)).map((match: any) => (
+              <div key={String(match.matchNumber)} className="space-y-2 rounded-md border border-border p-3">
+                <p className="text-xs font-semibold">{String(match.matchNumber ?? 'Confronto')} — {match.team1} x {match.team2}</p>
+                {isAdmin ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
+                      Vencedor: {match.team1}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={savingManualDecision} onClick={() => saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
+                      Vencedor: {match.team2}
+                    </Button>
+                  </div>
+                ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
+              </div>
+            ))}
+            {manualDecisionError && <p className="text-xs text-destructive">{manualDecisionError}</p>}
+          </div>
         )}
         {finished && knockoutData.podium && knockoutData.podium.some(p => p.team) && (
           <div className="mt-6 space-y-3">

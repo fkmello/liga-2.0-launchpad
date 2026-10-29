@@ -109,3 +109,114 @@ export function diffStandings(
   }
   return divergences;
 }
+
+
+interface LibertadoresClassificationRow {
+  name: string;
+  points: number | null;
+  played: number | null;
+  wins: number | null;
+  draws: number | null;
+  losses: number | null;
+  goalsFor: number | null;
+  goalDiff: number | null;
+}
+
+/** Parses both the old 9-column and new 10-column Libertadores row formats. */
+function parseLibertadoresClassificationRow(row: unknown): LibertadoresClassificationRow | null {
+  if (!Array.isArray(row) || row.length < 9) return null;
+  const name = String(row[2] ?? '').trim();
+  if (!normalizeName(name)) return null;
+  const isNewFormat = row.length >= 10;
+  return {
+    name,
+    points: toNum(row[3]),
+    played: toNum(row[4]),
+    wins: toNum(row[5]),
+    draws: toNum(row[6]),
+    losses: toNum(row[7]),
+    goalsFor: isNewFormat ? toNum(row[8]) : null,
+    goalDiff: toNum(row[isNewFormat ? 9 : 8]),
+  };
+}
+
+/**
+ * Compara o contrato de classificação dos torneios continentais (não os índices
+ * genéricos das ligas). O cache antigo não contém pontos pró; esse campo só é
+ * comparado se também existir na classificação de referência. Permite ignorar
+ * grupos auxiliares legados, como o grupo H na Sul-Americana.
+ */
+export function diffLibertadoresClassification(
+  baseline: TournamentCachePayload | null,
+  generatedClassification: TournamentCachePayload['classificacao'] | null | undefined,
+  excludedGroups: string[] = [],
+): StandingsDivergence[] {
+  if (!baseline?.classificacao?.grupos || !generatedClassification?.grupos) return [];
+
+  const excluded = new Set(excludedGroups.map(normalizeName));
+  const base = new Map<string, LibertadoresClassificationRow>();
+  for (const [groupName, rows] of Object.entries(baseline.classificacao.grupos)) {
+    if (excluded.has(normalizeName(groupName))) continue;
+    for (const raw of Array.isArray(rows) ? rows as unknown[] : []) {
+      const row = parseLibertadoresClassificationRow(raw);
+      if (row) base.set(normalizeName(row.name), row);
+    }
+  }
+
+  const divergences: StandingsDivergence[] = [];
+  const generatedNames = new Set<string>();
+  for (const [groupName, rows] of Object.entries(generatedClassification.grupos)) {
+    if (excluded.has(normalizeName(groupName))) continue;
+    for (const raw of Array.isArray(rows) ? rows as unknown[] : []) {
+      const calculated = parseLibertadoresClassificationRow(raw);
+      if (!calculated) continue;
+      const normalizedName = normalizeName(calculated.name);
+      generatedNames.add(normalizedName);
+      const previous = base.get(normalizedName);
+      if (!previous) {
+        divergences.push({
+          equipe: calculated.name,
+          campo: 'presenca',
+          valor_atual: null,
+          valor_calculado: 'presente apenas no cálculo',
+        });
+        continue;
+      }
+      const fields: Array<[keyof LibertadoresClassificationRow, string]> = [
+        ['points', 'pontos'],
+        ['played', 'jogos'],
+        ['wins', 'vitorias'],
+        ['draws', 'empates'],
+        ['losses', 'derrotas'],
+        ['goalDiff', 'saldo'],
+      ];
+      if (previous.goalsFor !== null) fields.push(['goalsFor', 'pontos_pro']);
+      for (const [key, label] of fields) {
+        const before = previous[key];
+        const after = calculated[key];
+        if (typeof before !== 'number' || typeof after !== 'number') continue;
+        if (Math.abs(before - after) > 0.005) {
+          divergences.push({
+            equipe: calculated.name,
+            campo: label,
+            valor_atual: before,
+            valor_calculado: after,
+          });
+        }
+      }
+    }
+  }
+
+  for (const [normalizedName, previous] of base) {
+    if (!generatedNames.has(normalizedName)) {
+      divergences.push({
+        equipe: previous.name,
+        campo: 'presenca',
+        valor_atual: 'presente no cache',
+        valor_calculado: null,
+      });
+    }
+  }
+
+  return divergences;
+}

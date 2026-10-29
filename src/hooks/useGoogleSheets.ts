@@ -3,8 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchFromCache, fetchWithFallback } from '@/lib/sheetsCache';
 import { isConsolidatedTournament, useTournamentPayload } from '@/hooks/useTournamentPayload';
 import type { StandingRow } from '@/types/tournament';
-import { USE_CONSOLIDATED_LIBERTADORES } from '@/config/featureFlags';
-import { DEFAULT_SEASON } from '@/config/tournamentCacheKeys';
+import { USE_CONSOLIDATED_LIBERTADORES, USE_CONSOLIDATED_SULAMERICANA } from '@/config/featureFlags';
+import { DEFAULT_SEASON, getTournamentCacheKey } from '@/config/tournamentCacheKeys';
+import { resolveLibertadoresPodium } from '@/utils/libertadoresResults';
 
 
 export interface Confronto {
@@ -55,8 +56,20 @@ export interface ConfrontoCopa {
   scoreIda2: string;
   scoreVolta2: string;
   matchNumber: string;
+  /** Administrative resolution metadata; penalty scores are visual-only. */
+  manualWinner?: string | null;
+  manualPenaltyScore1?: number | null;
+  manualPenaltyScore2?: number | null;
   idCartola1?: string;
   idCartola2?: string;
+  team1Id?: string;
+  team2Id?: string;
+  team1Slot?: number;
+  team2Slot?: number;
+  team1Badge?: string;
+  team2Badge?: string;
+  team1BadgeFallback?: string;
+  team2BadgeFallback?: string;
   /** Identificador opcional de torneio (ver Confronto.league). */
   league?: string;
 }
@@ -64,6 +77,7 @@ export interface ConfrontoCopa {
 export interface PodiumEntry {
   position: number;
   badge: string;
+  badgeFallback?: string;
   team: string;
 }
 
@@ -204,24 +218,44 @@ export function useClassificacao(league: string = 'serie_a'): ClassificacaoResul
 
 export function useBaseDadosCopa(fase: string = '1ª Fase') {
   return useQuery<DadosExternosData>({
-    queryKey: ['base-dados-copa', fase],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'copa:brasil',
-      { action: 'base_dados_copa', fase },
-      (d) => d?.dados_externos
-    ),
+    queryKey: ['base-dados-copa', DEFAULT_SEASON, fase],
+    queryFn: async () => {
+      // Copa do Brasil reads the API shadow cache for the 2026 final-round automation
+      // and for the new-season draw/progression introduced from 2027 onward.
+      if (DEFAULT_SEASON >= 2026) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
+        const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows as string[][] : [];
+        return { headers: [], rows, raw: rows };
+      }
+      return fetchWithFallback<DadosExternosData>(
+        'copa:brasil',
+        { action: 'base_dados_copa', fase },
+        (d) => d?.dados_externos
+      );
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
 
 export function useConfrontosCopa(fase: string) {
   return useQuery<ConfrontosCopaData>({
-    queryKey: ['confrontos-copa', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'copa:brasil',
-      { action: 'confrontos_copa', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryKey: ['confrontos-copa', DEFAULT_SEASON, fase],
+    queryFn: async () => {
+      if (DEFAULT_SEASON >= 2026) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
+        // Once the consolidated cache exists, an empty/unfilled phase is intentional:
+        // never fall back to the old sheet pairings and accidentally undo the draw.
+        if (shadow?.fases && typeof shadow.fases === 'object') {
+          return shadow.fases[fase] ?? { fase, rodadaInfo: '', matches: [] };
+        }
+        return { fase, rodadaInfo: '', matches: [] };
+      }
+      return fetchWithFallback<ConfrontosCopaData>(
+        'copa:brasil',
+        { action: 'confrontos_copa', fase },
+        (d) => d?.fases?.[fase]
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -313,10 +347,45 @@ export function useConfrontosLibertadores(fase: string) {
     queryFn: async () => {
       if (USE_CONSOLIDATED_LIBERTADORES) {
         const shadow = await fetchFromCache<any>(`shadow/libertadores/${DEFAULT_SEASON}`);
-        const phase = shadow?.fases?.[fase];
-        if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
-        console.warn(`[libertadores] fase shadow "${fase}" inválida; usando cache oficial`);
+
+        // Se o cache consolidado existe, uma fase ainda não gerada deve aparecer vazia.
+        // Não recorremos ao Google Sheets nesse caso, pois o ambiente local pode não
+        // ter GOOGLE_PRIVATE_KEY configurada. O fallback continua para cache ausente
+        // ou payload consolidado inválido.
+        if (shadow?.fases && typeof shadow.fases === 'object' && !Array.isArray(shadow.fases)) {
+          const phase = shadow.fases[fase];
+          if (phase && Array.isArray(phase.matches)) {
+            if (fase !== 'Final') return phase as ConfrontosCopaData;
+            const podium = resolveLibertadoresPodium(phase.matches);
+            if (!podium) return phase as ConfrontosCopaData;
+            const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows : [];
+            const badgeFor = (team: string) => {
+              const normalized = team.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              const row = rows.find((entry: any) => Array.isArray(entry) &&
+                String(entry[0] ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === normalized);
+              return String(row?.[2] ?? '');
+            };
+            return {
+              ...phase,
+              podium: [
+                { position: 1, team: podium.champion, badge: badgeFor(podium.champion) },
+                { position: 2, team: podium.runnerUp, badge: badgeFor(podium.runnerUp) },
+                { position: 3, team: podium.third, badge: badgeFor(podium.third) },
+              ],
+            } as ConfrontosCopaData;
+          }
+
+          console.warn(`[libertadores] fase shadow "${fase}" ainda não disponível; exibindo fase vazia`);
+          return {
+            fase,
+            rodadaInfo: '',
+            matches: [],
+          };
+        }
+
+        console.warn('[libertadores] cache shadow ausente ou inválido; usando cache oficial');
       }
+
       return fetchWithFallback<ConfrontosCopaData>(
         'libertadores',
         { action: 'confrontos_libertadores', fase },
@@ -330,52 +399,87 @@ export function useConfrontosLibertadores(fase: string) {
 export function useConfrontosSulamericanaGrupos(rodada: number) {
   return useQuery<LibertadoresGroupMatchesData>({
     queryKey: ['confrontos-sulamericana-grupos', rodada],
-    queryFn: () => fetchWithFallback<LibertadoresGroupMatchesData>(
-      'sulamericana',
-      { action: 'confrontos_sulamericana_grupos', rodada: rodada.toString() },
-      (d) => d?.grupos?.[`rodada_${rodada}`]
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        const round = shadow?.fases?.['Fase de Grupos']?.['rodada_' + rodada];
+        if (round && Array.isArray(round.groups)) return { tournament: String(round.tournament ?? ''), round: String(round.round ?? ('Rodada ' + rodada)), groups: round.groups };
+      }
+      return fetchWithFallback<LibertadoresGroupMatchesData>('sulamericana', { action: 'confrontos_sulamericana_grupos', rodada: rodada.toString() }, (d) => d?.grupos?.['rodada_' + rodada]);
+    },
     staleTime: 5 * 60 * 1000,
     enabled: rodada >= 1 && rodada <= 6,
   });
 }
-
 export function useDadosExternosSulamericana() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-sulamericana'],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'sulamericana',
-      { action: 'dados_externos_sulamericana' },
-      (d) => d?.dados_externos
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        const rows = shadow?.dados_externos?.rows;
+        if (Array.isArray(rows) && rows.length) return { headers: [], rows, raw: rows };
+      }
+      return fetchWithFallback<DadosExternosData>('sulamericana', { action: 'dados_externos_sulamericana' }, (d) => d?.dados_externos);
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
-
 export function useClassificacaoSulamericana() {
   return useQuery<LibertadoresGroupData>({
     queryKey: ['classificacao-sulamericana'],
-    queryFn: () => fetchWithFallback<LibertadoresGroupData>(
-      'sulamericana',
-      { action: 'classificacao_sulamericana' },
-      (d) => d?.classificacao
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        const standings = shadow?.classificacao?.grupos;
+        if (standings && typeof standings === 'object' && Object.keys(standings).length) {
+          return { groups: Object.entries(standings).map(([name, rows]) => ({
+            name, headers: ['', name, '', 'P', 'J', 'V', 'E', 'D', 'PF', 'SG'],
+            rows: Array.isArray(rows) ? rows.map((row: any) => Array.isArray(row) && row.length === 9 ? [...row.slice(0, 8), '', row[8]] : row) : [],
+          })) };
+        }
+      }
+      return fetchWithFallback<LibertadoresGroupData>('sulamericana', { action: 'classificacao_sulamericana' }, (d) => d?.classificacao);
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
-
 export function useConfrontosSulamericana(fase: string) {
   return useQuery<ConfrontosCopaData>({
     queryKey: ['confrontos-sulamericana', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'sulamericana',
-      { action: 'confrontos_sulamericana', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        if (shadow?.fases && typeof shadow.fases === 'object' && !Array.isArray(shadow.fases)) {
+          const phase = shadow.fases[fase];
+          if (phase && Array.isArray(phase.matches)) {
+            if (fase !== 'Final') return phase as ConfrontosCopaData;
+            const podium = resolveLibertadoresPodium(phase.matches);
+            if (!podium) return phase as ConfrontosCopaData;
+            const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows : [];
+            const badgeFor = (team: string) => {
+              const normalized = team.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              const row = rows.find((entry: any) => Array.isArray(entry) &&
+                String(entry[0] ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === normalized);
+              return String(row?.[2] ?? '');
+            };
+            return {
+              ...phase,
+              podium: [
+                { position: 1, team: podium.champion, badge: badgeFor(podium.champion) },
+                { position: 2, team: podium.runnerUp, badge: badgeFor(podium.runnerUp) },
+                { position: 3, team: podium.third, badge: badgeFor(podium.third) },
+              ],
+            } as ConfrontosCopaData;
+          }
+          return { fase, rodadaInfo: '', matches: [] };
+        }
+      }
+      return fetchWithFallback<ConfrontosCopaData>('sulamericana', { action: 'confrontos_sulamericana', fase }, (d) => d?.fases?.[fase]);
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
-
 export function useDadosExternosIntercontinental() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-intercontinental'],

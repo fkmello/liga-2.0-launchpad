@@ -1,9 +1,12 @@
-import { useTournamentFinished } from '@/hooks/useTournamentFinished';
 import { useEffect, useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { DEFAULT_SEASON } from '@/config/tournamentCacheKeys';
 import {
   useDadosExternosLibertadores,
   useClassificacaoLibertadores,
@@ -12,11 +15,15 @@ import {
   type Confronto,
 } from '@/hooks/useGoogleSheets';
 import CupMatchCard from './CupMatchCard';
+import TournamentPodium from './TournamentPodium';
 import MatchCard from './MatchCard';
 import { canCompareContinental, buildTeamIdMap, CONTINENTAL_ALLOWED_ROUNDS } from '@/utils/matchComparison';
 import { usePartialScores } from '@/hooks/usePartialScores';
 import { useUserTeamIds, buildIsUserTeamById } from '@/hooks/useUserTeamIds';
 import { useUserTeamNames } from '@/hooks/useUserTeamNames';
+import { resolveLibertadoresPodium } from '@/utils/libertadoresResults';
+import { isUnresolvedLibertadoresKnockoutTie } from '@/utils/libertadoresKnockoutTie';
+import { applyManualLibertadoresWinner } from '@/utils/applyManualLibertadoresWinner';
 
 const FASES = [
   'Classificação',
@@ -58,9 +65,18 @@ interface LibertadoresViewProps {
   initialRodadaGrupos?: number;
 }
 
-const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
-  const { finished } = useTournamentFinished(slug);
+const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, initialFase, initialRodadaGrupos }: LibertadoresViewProps) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
+  const [manualDecisionError, setManualDecisionError] = useState<string | null>(null);
+  const [savingManualDecision, setSavingManualDecision] = useState(false);
+  const [simulatedManualWinner, setSimulatedManualWinner] = useState<string | null>(null);
+  const [simulationEnabled, setSimulationEnabled] = useState(false);
+  const [manualGroupOrders, setManualGroupOrders] = useState<Record<string, string[]>>({});
+  const [pendingGroupOrders, setPendingGroupOrders] = useState<Record<string, string[]>>({});
+  const [manualGlobalOrder, setManualGlobalOrder] = useState<string[]>([]);
+  const [pendingGlobalOrders, setPendingGlobalOrders] = useState<Record<string, string[]>>({});
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
   const hasInitialGroupRoundFromUrl = initialFase === 'Fase de Grupos' && initialRodadaGrupos !== undefined;
@@ -75,6 +91,96 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       setFase(getInitialFase(rodadaBase));
     }
   }, [rodadaBase, initialFase]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    const loadManualGroupOrders = async () => {
+      const { data, error } = await supabase
+        .from('sheets_cache')
+        .select('data')
+        .eq('cache_key', `shadow/libertadores/${DEFAULT_SEASON}`)
+        .maybeSingle();
+      if (cancelled || error) return;
+      const decisions = (data?.data as any)?.classificacao?.desempatesManuais;
+      const orders = decisions?.grupos;
+      if (orders && typeof orders === 'object') setManualGroupOrders(orders);
+      if (Array.isArray(decisions?.global)) setManualGlobalOrder(decisions.global);
+    };
+    void loadManualGroupOrders();
+    return () => { cancelled = true; };
+  }, [isAdmin]);
+
+  const saveGroupTieOrder = async (groupName: string, teams: string[]) => {
+    if (!isAdmin || savingManualDecision || teams.length < 2) return;
+    setSavingManualDecision(true);
+    setManualDecisionError(null);
+    try {
+      const cacheKey = `shadow/libertadores/${DEFAULT_SEASON}`;
+      const { data: row, error: readError } = await supabase
+        .from('sheets_cache')
+        .select('data')
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
+      const payload = row.data as any;
+      payload.classificacao = payload.classificacao ?? { grupos: {} };
+      payload.classificacao.desempatesManuais = payload.classificacao.desempatesManuais ?? {};
+      payload.classificacao.desempatesManuais.grupos = payload.classificacao.desempatesManuais.grupos ?? {};
+      const previousOrder: string[] = payload.classificacao.desempatesManuais.grupos[groupName] ?? [];
+      payload.classificacao.desempatesManuais.grupos[groupName] = [
+        ...previousOrder.filter(team => !teams.includes(team)),
+        ...teams,
+      ];
+      const { error: saveError } = await supabase
+        .from('sheets_cache')
+        .update({ data: payload })
+        .eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+      setManualGroupOrders(payload.classificacao.desempatesManuais.grupos);
+      setPendingGroupOrders(current => {
+        const next = { ...current };
+        delete next[`${groupName}::${teams.slice().sort().join('::')}`];
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-libertadores'] });
+    } catch (error) {
+      setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate do grupo.');
+    } finally {
+      setSavingManualDecision(false);
+    }
+  };
+
+  const saveGlobalTieOrder = async (teams: string[]) => {
+    if (!isAdmin || savingManualDecision || teams.length < 2) return;
+    setSavingManualDecision(true);
+    setManualDecisionError(null);
+    try {
+      const cacheKey = `shadow/libertadores/${DEFAULT_SEASON}`;
+      const { data: row, error: readError } = await supabase.from('sheets_cache').select('data').eq('cache_key', cacheKey).maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
+      const payload = row.data as any;
+      payload.classificacao = payload.classificacao ?? { grupos: {} };
+      payload.classificacao.desempatesManuais = payload.classificacao.desempatesManuais ?? {};
+      const previous: string[] = payload.classificacao.desempatesManuais.global ?? [];
+      payload.classificacao.desempatesManuais.global = [...previous.filter(team => !teams.includes(team)), ...teams];
+      const { error: saveError } = await supabase.from('sheets_cache').update({ data: payload }).eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+      setManualGlobalOrder(payload.classificacao.desempatesManuais.global);
+      setPendingGlobalOrders(current => {
+        const next = { ...current };
+        delete next[teams.slice().sort().join('::')];
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-libertadores'] });
+    } catch (error) {
+      setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate global.');
+    } finally {
+      setSavingManualDecision(false);
+    }
+  };
 
   const isGroupMatches = fase === 'Fase de Grupos';
   const isGroupStage = fase === 'Classificação';
@@ -102,6 +208,29 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
   // Knockout data — only fetch when a knockout phase is selected
   const { data: knockoutData, isLoading: knockoutLoading, error: knockoutError } = useConfrontosLibertadores(isKnockout ? fase : 'Oitavas de Final');
+
+  // Simulação local, somente em deploys Vercel e mediante parâmetro explícito na URL.
+  // Não grava placares nem vencedores no Supabase.
+  const isVercelPreview = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+  const isLibertadoresTieSimulation = isVercelPreview && simulationEnabled;
+  const displayedKnockoutData = isLibertadoresTieSimulation && knockoutData?.matches?.length
+    ? {
+        ...knockoutData,
+        matches: knockoutData.matches.map((match, index) => {
+          if (index !== 0) return match;
+          const number = String(match.matchNumber ?? '').toUpperCase();
+          const isOneOffFinal = fase === 'Final' && (number === 'FINAL' || number.includes('LUGAR'));
+          return {
+            ...match,
+            scoreIda1: '1',
+            scoreIda2: isOneOffFinal ? '1' : '0',
+            scoreVolta1: isOneOffFinal ? '' : '0',
+            scoreVolta2: isOneOffFinal ? '' : '1',
+            manualWinner: simulatedManualWinner,
+          };
+        }),
+      }
+    : knockoutData;
 
   // Group matches data (RDD #01-06)
   const { data: groupMatchesData, isLoading: groupMatchesLoading, error: groupMatchesError } = useConfrontosLibertadoresGrupos(rodadaGrupos);
@@ -131,6 +260,49 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     () => buildIsUserTeamById(teamNameToId, userIds, userTeamNames),
     [teamNameToId, userIds, userTeamNames],
   );
+
+  const automaticPodium = useMemo(() => {
+    if (!isFinal) return null;
+    const podium = resolveLibertadoresPodium(knockoutData?.matches);
+    if (!podium) return null;
+    const badgeFor = (team: string) => badgeUrls[team] || badgeUrls[team.toUpperCase()] || badgeUrls[normalizeName(team)] || '';
+    return {
+      ...podium,
+      championBadge: badgeFor(podium.champion),
+      runnerUpBadge: badgeFor(podium.runnerUp),
+      thirdBadge: badgeFor(podium.third),
+    };
+  }, [isFinal, knockoutData, badgeUrls]);
+
+  const isUnresolvedKnockoutTie = (match: any, phaseName = fase) =>
+    isUnresolvedLibertadoresKnockoutTie(match, phaseName);
+
+  const saveManualWinner = async (phaseName: string, matchNumber: string, winner: string) => {
+    if (!isAdmin || !winner || savingManualDecision) return;
+    setSavingManualDecision(true);
+    setManualDecisionError(null);
+    try {
+      const cacheKey = `shadow/libertadores/${DEFAULT_SEASON}`;
+      const { data: row, error: readError } = await supabase
+        .from('sheets_cache')
+        .select('data')
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Não foi encontrado o cache shadow da Libertadores.');
+      const payload = applyManualLibertadoresWinner(row.data as any, phaseName, matchNumber, winner);
+      const { error: saveError } = await supabase
+        .from('sheets_cache')
+        .update({ data: payload })
+        .eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-libertadores'] });
+    } catch (error) {
+      setManualDecisionError(error instanceof Error ? error.message : 'Não foi possível salvar o desempate.');
+    } finally {
+      setSavingManualDecision(false);
+    }
+  };
 
   // Determine the active Cartola round for partial scores
   const activeCartolaRound = useMemo(() => {
@@ -335,7 +507,7 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
     const statHeaders = ['P', 'J', 'V', 'E', 'D', 'SG'];
     const parseNum = (v: string) => parseFloat((v || '0').replace(',', '.')) || 0;
 
-    const sortRows = (rows: string[][]) => [...rows].sort((a, b) => {
+    const sortRows = (rows: string[][], groupName?: string) => [...rows].sort((a, b) => {
       const pDiff = parseNum(b[3]) - parseNum(a[3]);
       if (pDiff !== 0) return pDiff;
       const vDiff = parseNum(b[5]) - parseNum(a[5]);
@@ -344,17 +516,68 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       if (sgDiff !== 0) return sgDiff;
       const gpA = a.length >= 10 ? parseNum(a[a.length - 2]) : 0;
       const gpB = b.length >= 10 ? parseNum(b[b.length - 2]) : 0;
-      return gpB - gpA;
+      if (gpB !== gpA) return gpB - gpA;
+      const order = groupName ? (manualGroupOrders[groupName] ?? []) : [];
+      const rank = new Map(order.map((team, index) => [team, index]));
+      const rankA = rank.get((a[2] ?? '').trim());
+      const rankB = rank.get((b[2] ?? '').trim());
+      return rankA === undefined || rankB === undefined ? 0 : rankA - rankB;
     });
 
+    const groupTieClusters = (rows: string[][]) => {
+      const ranked = sortRows(rows);
+      const criteriaEqual = (a: string[], b: string[]) =>
+        parseNum(a[3]) === parseNum(b[3]) &&
+        parseNum(a[5]) === parseNum(b[5]) &&
+        parseNum(a[a.length - 1]) === parseNum(b[b.length - 1]) &&
+        parseNum(a.length >= 10 ? a[a.length - 2] : '0') === parseNum(b.length >= 10 ? b[b.length - 2] : '0');
+      const clusters: string[][] = [];
+      let current: string[] = [];
+      for (let i = 0; i < ranked.length; i++) {
+        if (i > 0 && criteriaEqual(ranked[i - 1], ranked[i])) {
+          if (current.length === 0) current.push((ranked[i - 1][2] || '').trim());
+          current.push((ranked[i][2] || '').trim());
+        } else {
+          if (current.length > 1) clusters.push(current);
+          current = [];
+        }
+      }
+      if (current.length > 1) clusters.push(current);
+      return clusters;
+    };
+
     const groupsSorted = sortedGroups.map((group, gIdx) => {
-      const sorted = sortRows(group.rows).map((row, idx) => {
+      const sorted = sortRows(group.rows, group.name).map((row, idx) => {
         const newRow = [...row];
         newRow[0] = String(idx + 1);
         return newRow;
       });
       return { gIdx, name: group.name, rows: sorted };
     });
+
+    const qualifiedRows = groupsSorted.flatMap(group => group.rows.slice(0, 2).map(row => ({
+      team: (row[2] ?? '').trim(),
+      points: parseNum(row[3]),
+      wins: parseNum(row[5]),
+      goalDiff: parseNum(row[row.length - 1]),
+      goalsFor: parseNum(row.length >= 10 ? row[row.length - 2] : '0'),
+    }))).filter(row => !!row.team).sort((a, b) =>
+      b.points - a.points || b.wins - a.wins || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor
+    );
+    const globalTieClusters: string[][] = [];
+    let globalCluster: string[] = [];
+    const globalCriteriaEqual = (a: typeof qualifiedRows[number], b: typeof qualifiedRows[number]) =>
+      a.points === b.points && a.wins === b.wins && a.goalDiff === b.goalDiff && a.goalsFor === b.goalsFor;
+    for (let i = 0; i < qualifiedRows.length; i++) {
+      if (i > 0 && globalCriteriaEqual(qualifiedRows[i - 1], qualifiedRows[i])) {
+        if (globalCluster.length === 0) globalCluster.push(qualifiedRows[i - 1].team);
+        globalCluster.push(qualifiedRows[i].team);
+      } else {
+        if (globalCluster.length > 1) globalTieClusters.push(globalCluster);
+        globalCluster = [];
+      }
+    }
+    if (globalCluster.length > 1) globalTieClusters.push(globalCluster);
 
     // Compute 2 best thirds across all groups
     const thirds = groupsSorted
@@ -375,10 +598,75 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
 
     return (
       <div className="space-y-6">
+        {globalTieClusters.map(teams => {
+          const tieKey = teams.slice().sort().join('::');
+          const savedOrder = manualGlobalOrder.filter(team => teams.includes(team));
+          const pendingOrder = pendingGlobalOrders[tieKey] ?? savedOrder;
+          const complete = pendingOrder.length === teams.length && new Set(pendingOrder).size === teams.length;
+          return (
+            <div key={tieKey} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-200">Empate na ordenação geral dos classificados</p>
+              <p className="text-xs text-muted-foreground">Clique nos times na ordem do sorteio. A chave das oitavas só será gerada quando a ordem global estiver definida.</p>
+              {isAdmin ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {teams.map(team => (
+                      <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
+                        disabled={savingManualDecision || pendingOrder.includes(team)}
+                        onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
+                        {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGlobalTieOrder(pendingOrder)}>Salvar ordem do sorteio</Button>
+                    <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGlobalOrders(current => ({ ...current, [tieKey]: [] }))}>Refazer ordem</Button>
+                  </div>
+                </>
+              ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
+            </div>
+          );
+        })}
+        {manualDecisionError && isGroupStage && <p className="text-xs text-destructive">{manualDecisionError}</p>}
         {groupsSorted.map(({ gIdx, name, rows: sortedRows }) => {
           return (
           <div key={gIdx}>
             <h3 className="text-xs font-bold text-primary mb-2 uppercase tracking-wide">{name}</h3>
+
+            {groupTieClusters(classificacaoData.groups.find(g => g.name === name)?.rows ?? []).map((teams) => {
+              const tieKey = `${name}::${teams.slice().sort().join('::')}`;
+              const savedOrder = (manualGroupOrders[name] ?? []).filter(team => teams.includes(team));
+              const pendingOrder = pendingGroupOrders[tieKey] ?? savedOrder;
+              const complete = pendingOrder.length === teams.length && new Set(pendingOrder).size === teams.length;
+              return (
+                <div key={tieKey} className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-amber-200">Empate nos critérios de classificação</p>
+                  <p className="text-xs text-muted-foreground">Clique nos times na ordem definida pelo sorteio. A chave não avança enquanto o desempate estiver pendente.</p>
+                  {isAdmin ? (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {teams.map(team => (
+                          <Button key={team} size="sm" variant={pendingOrder.includes(team) ? 'default' : 'outline'}
+                            disabled={savingManualDecision || pendingOrder.includes(team)}
+                            onClick={() => setPendingGroupOrders(current => ({ ...current, [tieKey]: [...pendingOrder, team] }))}>
+                            {pendingOrder.includes(team) ? `${pendingOrder.indexOf(team) + 1}. ${team}` : team}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" disabled={!complete || savingManualDecision} onClick={() => saveGroupTieOrder(name, pendingOrder)}>
+                          Salvar ordem do sorteio
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={savingManualDecision} onClick={() => setPendingGroupOrders(current => ({ ...current, [tieKey]: [] }))}>
+                          Refazer ordem
+                        </Button>
+                      </div>
+                    </>
+                  ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
+                </div>
+              );
+            })}
+            {manualDecisionError && isGroupStage && <p className="mb-3 text-xs text-destructive">{manualDecisionError}</p>}
 
             {/* Header row */}
             <div className="flex items-center px-2 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
@@ -446,20 +734,28 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
       );
     }
 
-    if (!knockoutData?.matches) {
+    if (!displayedKnockoutData?.matches) {
       return <p className="text-center text-sm text-muted-foreground py-8">Nenhum confronto encontrado.</p>;
     }
 
     return (
       <div className="space-y-2">
-        {knockoutData.rodadaInfo && (
+        {isLibertadoresTieSimulation && (
+          <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-1">
+            <p className="text-sm font-semibold">Modo de simulação de desempate</p>
+            <p className="text-xs text-muted-foreground">O primeiro confronto está temporariamente empatado apenas nesta tela. Nenhum placar foi alterado no banco de dados.</p>
+            {simulatedManualWinner && <p className="text-xs font-medium">Escolha simulada: {simulatedManualWinner}. Nada foi salvo.</p>}
+            <Button size="sm" variant="outline" onClick={() => setSimulatedManualWinner(null)}>Reiniciar simulação</Button>
+          </div>
+        )}
+        {displayedKnockoutData.rodadaInfo && (
           <div className="text-center mb-2">
-            <p className="text-xs text-muted-foreground">{knockoutData.rodadaInfo}</p>
+            <p className="text-xs text-muted-foreground">{displayedKnockoutData.rodadaInfo}</p>
           </div>
         )}
 
-        {knockoutData.matches.length > 0 ? (
-          knockoutData.matches.map((match, idx) => {
+        {displayedKnockoutData.matches.length > 0 ? (
+          displayedKnockoutData.matches.map((match, idx) => {
             const id1 = teamNameToId.get(match.team1?.toUpperCase());
             const id2 = teamNameToId.get(match.team2?.toUpperCase());
             const hasIds = !!id1 && !!id2;
@@ -482,35 +778,42 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
           </p>
         )}
 
-        {/* Podium for Final */}
-        {finished && knockoutData.podium && knockoutData.podium.some(p => p.team) && (
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-yellow-500" />
-              <h3 className="text-sm font-bold text-foreground">Premiação</h3>
-            </div>
-            {knockoutData.podium.map((entry) => {
-              const isChamp = entry.position === 1;
-              return (
-                <div key={entry.position}
-                  className={`flex items-center gap-3 rounded-lg border p-3 ${isChamp ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-card border-border'}`}>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
-                    entry.position === 1 ? 'bg-yellow-500 text-yellow-950' :
-                    entry.position === 2 ? 'bg-gray-300 text-gray-800' : 'bg-amber-700 text-amber-100'
-                  }`}>
-                    {entry.position}º
+        {isKnockout && displayedKnockoutData.matches.some((match: any) => isUnresolvedKnockoutTie(match, fase)) && (
+          <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-sm font-semibold text-amber-200">Desempate manual necessário</p>
+            <p className="text-xs text-muted-foreground">Há confronto empatado no agregado. Selecione o vencedor do sorteio; a escolha ficará salva no cache da Libertadores e será preservada pela sincronização.</p>
+            {displayedKnockoutData.matches.filter((match: any) => isUnresolvedKnockoutTie(match, fase)).map((match: any) => (
+              <div key={String(match.matchNumber)} className="space-y-2 rounded-md border border-border p-3">
+                <p className="text-xs font-semibold">{String(match.matchNumber ?? 'Confronto')} — {match.team1} x {match.team2}</p>
+                {isAdmin ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" disabled={!isLibertadoresTieSimulation && savingManualDecision} onClick={() => isLibertadoresTieSimulation ? setSimulatedManualWinner(String(match.team1)) : saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team1))}>
+                      Vencedor: {match.team1}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={!isLibertadoresTieSimulation && savingManualDecision} onClick={() => isLibertadoresTieSimulation ? setSimulatedManualWinner(String(match.team2)) : saveManualWinner(fase, String(match.matchNumber ?? ''), String(match.team2))}>
+                      Vencedor: {match.team2}
+                    </Button>
                   </div>
-                  {entry.badge && (
-                    <img src={entry.badge} alt={entry.team} className={`object-contain ${isChamp ? 'w-10 h-10' : 'w-8 h-8'}`}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  )}
-                  <span className={`font-semibold ${isChamp ? 'text-base text-foreground' : 'text-sm text-muted-foreground'}`}>
-                    {entry.team}
-                  </span>
-                  {isChamp && <Trophy className="w-4 h-4 text-yellow-500 ml-auto" />}
-                </div>
-              );
-            })}
+                ) : <p className="text-xs text-muted-foreground">Aguardando um administrador registrar o sorteio.</p>}
+              </div>
+            ))}
+            {manualDecisionError && <p className="text-xs text-destructive">{manualDecisionError}</p>}
+          </div>
+        )}
+
+        {/* Libertadores podium appears automatically when final and third-place results are complete. */}
+        {automaticPodium && (
+          <div className="mt-6">
+            <TournamentPodium
+              title="Premiação da Libertadores"
+              champion={automaticPodium.champion}
+              championBadge={automaticPodium.championBadge}
+              runnerUp={automaticPodium.runnerUp}
+              runnerUpBadge={automaticPodium.runnerUpBadge}
+              third={automaticPodium.third}
+              thirdBadge={automaticPodium.thirdBadge}
+              isUserTeam={isUserTeam}
+            />
           </div>
         )}
       </div>
@@ -520,6 +823,20 @@ const LibertadoresView = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMerca
   return (
     <div className="space-y-4">
       {/* Phase selector */}
+      {isVercelPreview && (
+        <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">Teste de desempate (somente preview)</p>
+            <p className="text-xs text-muted-foreground">Cria um empate fictício nesta tela, sem salvar placares ou vencedores.</p>
+          </div>
+          <Button size="sm" variant={isLibertadoresTieSimulation ? 'secondary' : 'outline'} onClick={() => {
+            setSimulationEnabled(current => !current);
+            setSimulatedManualWinner(null);
+          }}>
+            {isLibertadoresTieSimulation ? 'Desativar simulação' : 'Simular empate'}
+          </Button>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <Trophy className="w-4 h-4 text-primary flex-shrink-0" />
         <Select value={fase} onValueChange={handleFaseChange}>
