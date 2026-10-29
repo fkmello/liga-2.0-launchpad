@@ -78,7 +78,11 @@ function copaMatchIdentity(match: Record<string, any>): string | null {
   return number ? 'number:' + number : null;
 }
 
-function mergeCopaPhaseMatches(prev: unknown, next: unknown): unknown {
+function mergeCopaPhaseMatches(
+  prev: unknown,
+  next: unknown,
+  preserveRemovedScoredMatches = true,
+): unknown {
   const prevPhase = prev as Fase | undefined;
   const nextPhase = next as Fase | undefined;
   const prevMatches = prevPhase?.matches;
@@ -107,10 +111,14 @@ function mergeCopaPhaseMatches(prev: unknown, next: unknown): unknown {
     return merged;
   });
 
-  for (const previous of prevMatches as Record<string, any>[]) {
-    const identity = copaMatchIdentity(previous);
-    const hasScores = SCORE_FIELDS.some((field) => isFilled(previous?.[field]));
-    if (hasScores && identity && !nextIdentities.has(identity)) mergedMatches.push(previous);
+  // Preserve removed scored fixtures for legacy Copa do Brasil data, but not for
+  // Libertadores knockout rounds: a new pairing replaces the old fixture entirely.
+  if (preserveRemovedScoredMatches) {
+    for (const previous of prevMatches as Record<string, any>[]) {
+      const identity = copaMatchIdentity(previous);
+      const hasScores = SCORE_FIELDS.some((field) => isFilled(previous?.[field]));
+      if (hasScores && identity && !nextIdentities.has(identity)) mergedMatches.push(previous);
+    }
   }
 
   return { ...(prevPhase as Fase), ...(nextPhase as Fase), matches: mergedMatches };
@@ -178,7 +186,7 @@ export function mergeLibertadoresFasesPreservingScores(
       }
       out[key] = { ...prevStage, ...nextStage, ...mergedRounds };
     } else {
-      out[key] = mergeCopaPhaseMatches(a[key], b[key]);
+      out[key] = mergeCopaPhaseMatches(a[key], b[key], false);
     }
   }
   return out;
