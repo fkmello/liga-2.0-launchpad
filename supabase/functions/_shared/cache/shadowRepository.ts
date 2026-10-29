@@ -57,7 +57,7 @@ export function createShadowRepository(opts: {
     async compare(_key: string, next: TournamentCachePayload): Promise<CacheComparison> {
       return diffPayloads(await repo.load(''), next, {
         league: opts.league,
-        semantic: opts.league === 'copa_brasil' || opts.league === 'libertadores',
+        semantic: opts.league === 'copa_brasil' || opts.league === 'libertadores' || opts.league === 'sulamericana',
       });
     },
 
@@ -117,6 +117,6 @@ function mergeForLeague(
   next: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
   if (league === 'copa_brasil') return mergeCopaBrasilFasesPreservingScores(prev, next);
-  if (league === 'libertadores') return mergeLibertadoresFasesPreservingScores(prev, next);
+  if (league === 'libertadores' || league === 'sulamericana') return mergeLibertadoresFasesPreservingScores(prev, next);
   return mergeFasesPreservingScores(prev, next);
 }
