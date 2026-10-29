@@ -68,6 +68,8 @@ export interface ConfrontoCopa {
   team2Slot?: number;
   team1Badge?: string;
   team2Badge?: string;
+  team1BadgeFallback?: string;
+  team2BadgeFallback?: string;
   /** Identificador opcional de torneio (ver Confronto.league). */
   league?: string;
 }
@@ -75,6 +77,7 @@ export interface ConfrontoCopa {
 export interface PodiumEntry {
   position: number;
   badge: string;
+  badgeFallback?: string;
   team: string;
 }
 
