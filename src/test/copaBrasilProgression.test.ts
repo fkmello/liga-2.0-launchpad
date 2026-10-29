@@ -88,6 +88,38 @@ describe('Copa do Brasil automatic draws and progression', () => {
       .toEqual(second.map((m: any) => [m.team1, m.team2]));
   });
 
+  it('computes the winner, runner-up and third-place podium after both one-off matches', () => {
+    const { rows, teams, fases } = setup();
+    let next = resolveCopaBrasilProgression(fases, rows, teams);
+    next = { ...next, '1ª Fase': { ...next['1ª Fase'], matches: completePhase(next['1ª Fase'].matches) } };
+    next = resolveCopaBrasilProgression(next, rows, teams);
+    next = { ...next, '2ª Fase': { ...next['2ª Fase'], matches: completePhase(next['2ª Fase'].matches) } };
+    next = resolveCopaBrasilProgression(next, rows, teams);
+    next = { ...next, 'Oitavas de Final': { ...next['Oitavas de Final'], matches: completePhase(next['Oitavas de Final'].matches) } };
+    next = resolveCopaBrasilProgression(next, rows, teams);
+    next = { ...next, 'Quartas de Final': { ...next['Quartas de Final'], matches: completePhase(next['Quartas de Final'].matches) } };
+    next = resolveCopaBrasilProgression(next, rows, teams);
+    next = { ...next, Semifinal: { ...next.Semifinal, matches: completePhase(next.Semifinal.matches) } };
+    next = resolveCopaBrasilProgression(next, rows, teams);
+    next = {
+      ...next,
+      Final: {
+        ...next.Final,
+        matches: next.Final.matches.map((match: any, index: number) => ({
+          ...match,
+          scoreIda1: index === 0 ? '5,00' : '2,00',
+          scoreIda2: index === 0 ? '3,00' : '1,00',
+        })),
+      },
+    };
+    next = resolveCopaBrasilProgression(next, rows, teams);
+
+    expect(next.Final.podium).toHaveLength(3);
+    expect(next.Final.podium.map((entry: any) => entry.position)).toEqual([1, 2, 3]);
+    expect(next.Final.podium[0].team).toBe(next.Final.matches[0].team1);
+    expect(next.Final.podium[2].team).toBe(next.Final.matches[1].team1);
+  });
+
   it('progresses through the fixed bracket and applies a row-slot replacement only to the next phase', () => {
     const { rows, teams, fases } = setup();
     let next = resolveCopaBrasilProgression(fases, rows, teams);
