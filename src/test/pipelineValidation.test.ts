@@ -364,6 +364,46 @@ describe('pipeline validation indicators', () => {
     expect([...rows.keys()]).toEqual(['shadow/libertadores/2026']);
   });
 
+  it('does not restore obsolete scored fixtures when Libertadores knockout pairings change', () => {
+    const previous = {
+      'Oitavas de Final': {
+        matches: [{
+          matchNumber: 'R16-1',
+          team1: 'Time Antigo A',
+          team2: 'Time Antigo B',
+          scoreIda1: '2',
+          scoreIda2: '0',
+          scoreVolta1: '1',
+          scoreVolta2: '0',
+        }],
+      },
+    };
+    const next = {
+      'Oitavas de Final': {
+        matches: [{
+          matchNumber: 'R16-1',
+          team1: 'Time Novo A',
+          team2: 'Time Novo B',
+          scoreIda1: '',
+          scoreIda2: '',
+          scoreVolta1: '',
+          scoreVolta2: '',
+        }],
+      },
+    };
+
+    const merged = mergeLibertadoresFasesPreservingScores(previous, next) as any;
+    expect(merged['Oitavas de Final'].matches).toHaveLength(1);
+    expect(merged['Oitavas de Final'].matches[0]).toMatchObject({
+      team1: 'Time Novo A',
+      team2: 'Time Novo B',
+      scoreIda1: '',
+      scoreIda2: '',
+      scoreVolta1: '',
+      scoreVolta2: '',
+    });
+  });
+
   it('reports structural classification differences as WARNING, not MATCH', () => {
     expect(resolveSemanticCompareStatus(['classificacao'], false).status).toBe('WARNING');
     expect(resolveSemanticCompareStatus([], false).status).toBe('MATCH');
