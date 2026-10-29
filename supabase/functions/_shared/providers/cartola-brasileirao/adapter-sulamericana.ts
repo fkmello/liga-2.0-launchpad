@@ -483,19 +483,20 @@ export function resolveLibertadoresProgression(
     { source: 'Oitavas de Final', target: 'Quartas de Final' },
     { source: 'Quartas de Final', target: 'Semifinal' },
   ];
-  let progressionBlocked = false;
-  for (const { source, target } of phases) {
+  let blockedAt = -1;
+  for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex++) {
+    const { source, target } = phases[phaseIndex];
     const sourceMatches = next?.[source]?.matches;
     const targetPhase = next?.[target];
     const expectedSourceMatches = source === 'Oitavas de Final' ? 8 : 4;
     if (!Array.isArray(sourceMatches) || !Array.isArray(targetPhase?.matches) ||
         sourceMatches.length !== expectedSourceMatches) {
-      progressionBlocked = true;
+      blockedAt = phaseIndex;
       break;
     }
     const winners = sourceMatches.map((match: ContinentalMatch) => resolveTwoLeggedMatch(match));
     if (winners.some((winner: any) => !winner)) {
-      progressionBlocked = true;
+      blockedAt = phaseIndex;
       break;
     }
     const pairs = [];
@@ -508,8 +509,22 @@ export function resolveLibertadoresProgression(
     next = { ...next, [target]: { ...targetPhase, matches } };
   }
 
-  // Never derive final/third-place fixtures from stale semifinal data when an earlier phase is blocked.
-  if (progressionBlocked) return next;
+  // If a phase is incomplete, remove any stale downstream pairings/results.
+  // Future-round teams are defined only after every match in the prior phase has a winner.
+  if (blockedAt >= 0) {
+    const downstream = blockedAt === 0
+      ? ['Quartas de Final', 'Semifinal', 'Final']
+      : ['Semifinal', 'Final'];
+    for (const phaseName of downstream) {
+      const phase = next?.[phaseName];
+      if (!Array.isArray(phase?.matches)) continue;
+      const matches = phase.matches.map((match: ContinentalMatch) =>
+        match?.team1 || match?.team2 ? replaceMatchTeams(match, '', '') : match
+      );
+      next = { ...next, [phaseName]: { ...phase, matches } };
+    }
+    return next;
+  }
 
   const semifinal = next?.Semifinal?.matches;
   const final = next?.Final;
