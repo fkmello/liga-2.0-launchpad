@@ -508,7 +508,7 @@ describe('pipeline validation indicators', () => {
       String(teamIndex + 1), '', `Auxiliar H-${teamIndex}`, '0', '0', '0', '0', '0', '0,00', '0,00',
     ]);
     const payload = {
-      classificacao: { grupos },
+      classificacao: { grupos: groups },
       dados_externos: { rows: Array.from({ length: 32 }, (_, i) => [`Time externo ${i}`, String(i + 1), '']) },
       fases: {},
     };
