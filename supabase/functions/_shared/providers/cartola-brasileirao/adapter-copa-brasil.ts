@@ -439,9 +439,9 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
     return { fases: progressedFases, teams };
   },
 
-  toFases(raw) {
+  toFases(raw, ctx) {
     const fases = { ...raw.fases };
-    if (fases.Final) fases.Final = { ...fases.Final, isFinal: true };
+    if (ctx.season >= 2027 && fases.Final) fases.Final = { ...fases.Final, isFinal: true };
     return fases;
   },
 
