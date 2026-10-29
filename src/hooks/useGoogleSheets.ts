@@ -423,7 +423,26 @@ export function useConfrontosSulamericana(fase: string) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
         if (shadow?.fases && typeof shadow.fases === 'object' && !Array.isArray(shadow.fases)) {
           const phase = shadow.fases[fase];
-          if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
+          if (phase && Array.isArray(phase.matches)) {
+            if (fase !== 'Final') return phase as ConfrontosCopaData;
+            const podium = resolveLibertadoresPodium(phase.matches);
+            if (!podium) return phase as ConfrontosCopaData;
+            const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows : [];
+            const badgeFor = (team: string) => {
+              const normalized = team.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              const row = rows.find((entry: any) => Array.isArray(entry) &&
+                String(entry[0] ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === normalized);
+              return String(row?.[2] ?? '');
+            };
+            return {
+              ...phase,
+              podium: [
+                { position: 1, team: podium.champion, badge: badgeFor(podium.champion) },
+                { position: 2, team: podium.runnerUp, badge: badgeFor(podium.runnerUp) },
+                { position: 3, team: podium.third, badge: badgeFor(podium.third) },
+              ],
+            } as ConfrontosCopaData;
+          }
           return { fase, rodadaInfo: '', matches: [] };
         }
       }
