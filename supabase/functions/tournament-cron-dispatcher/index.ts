@@ -82,10 +82,10 @@ async function patchState(db: Db, id: string, patch: Record<string, unknown>) {
   if (error) console.error('[cron-dispatcher] falha ao gravar estado:', error.message);
 }
 
-async function callSync(baseUrl: string, secret: string, league: string, season: number) {
+async function callSync(baseUrl: string, secret: string, league: string, season: number, officialWrite = false) {
   const url =
     `${baseUrl}/functions/v1/sync-tournament-api` +
-    `?league=${encodeURIComponent(league)}&season=${season}&persist=true`;
+    `?league=${encodeURIComponent(league)}&season=${season}&persist=true${officialWrite ? '&shadow=false' : ''}`;
 
   const res = await fetch(url, {
     method: 'POST',
@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
 
       let syncResult: Record<string, unknown>;
       try {
-        syncResult = await callSync(supabaseUrl, cronSecret, league, season);
+        syncResult = await callSync(supabaseUrl, cronSecret, league, season, def.cron.allowOfficialPersistence === true);
       } catch (e) {
         await fail('SYNC_ERROR', e);
         continue;
@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
     if (!state.second_sync_done && sinceFirst !== null && sinceFirst >= secondDelay) {
       let syncResult: Record<string, unknown>;
       try {
-        syncResult = await callSync(supabaseUrl, cronSecret, league, season);
+        syncResult = await callSync(supabaseUrl, cronSecret, league, season, def.cron.allowOfficialPersistence === true);
       } catch (e) {
         await fail('SYNC_ERROR', e);
         continue;
