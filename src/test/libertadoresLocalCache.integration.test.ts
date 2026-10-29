@@ -123,7 +123,7 @@ describe('Libertadores — progressão e persistência offline', () => {
       },
     };
 
-    phases['Oitavas de Final'] = completedRoundOf16ForQuarterfinals(phases['Quartas de Final'].matches);
+    fases['Oitavas de Final'] = completedRoundOf16ForQuarterfinals(fases['Quartas de Final'].matches);
 
     const repo = createShadowRepository({
       supabaseAdmin: supabaseAdmin as any,
