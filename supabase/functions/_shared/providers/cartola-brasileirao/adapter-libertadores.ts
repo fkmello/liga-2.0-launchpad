@@ -371,7 +371,7 @@ function allGroupMatchesComplete(fases: ContinentalFases): boolean {
   return true;
 }
 
-function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>; desempatesManuais?: { grupos?: Record<string, string[]>; global?: string[] } }): StandingRow[] | null {
+export function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>; desempatesManuais?: { grupos?: Record<string, string[]>; global?: string[] } }, expectedCount = 16): StandingRow[] | null {
   const qualified: StandingRow[] = [];
   for (const [group, rows] of Object.entries(classification?.grupos ?? {})) {
     const manualOrder = classification.desempatesManuais?.grupos?.[group] ?? [];
@@ -409,7 +409,7 @@ function qualifiedGroupTeams(classification: { grupos: Record<string, unknown[]>
       });
     }
   }
-  if (qualified.length !== 16 || qualified.some(row => !row.team)) return null;
+  if (qualified.length !== expectedCount || qualified.some(row => !row.team)) return null;
   const globalOrder = classification.desempatesManuais?.global ?? [];
   const globalRank = new Map(globalOrder.map((team, index) => [team, index]));
   qualified.sort((a, b) => {
