@@ -166,7 +166,7 @@ export function resolveCopaBrasil2026Final(fases: CupFases, teams: CartolaTeamRa
         const team1 = thirdPlace ? results[0]!.loser : results[0]!.winner;
         const team2 = thirdPlace ? results[1]!.loser : results[1]!.winner;
         const samePair = match.team1 === team1 && match.team2 === team2;
-        const updated = {
+        const updated: CupMatch = {
           ...match,
           team1,
           team2,
