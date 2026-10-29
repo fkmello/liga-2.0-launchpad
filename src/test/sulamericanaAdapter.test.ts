@@ -230,4 +230,41 @@ describe('Sul-Americana progression', () => {
     expect(result.Final.matches.every((match: any) => !match.scoreIda1 && !match.scoreIda2 && !match.scoreVolta1 && !match.scoreVolta2)).toBe(true);
   });
 
+
+  it('ignores the auxiliary Group H in standings and group-completion checks', () => {
+    const grupos: Record<string, unknown[]> = {};
+    for (let i = 0; i < 7; i++) {
+      const group = `GRUPO ${String.fromCharCode(65 + i)}`;
+      grupos[group] = [
+        standing(`Primeiro ${i}`, 40 - i, 6, 20 - i, 100 - i),
+        standing(`Segundo ${i}`, 25 - i, 4, 8 - i, 70 - i),
+        standing(`Terceiro ${i}`, 10 - i, 2, 1 - i, 40 - i),
+        standing(`Quarto ${i}`, 0, 0, -20, 10),
+      ];
+    }
+    grupos['GRUPO H'] = [
+      standing('Equipe Fictícia H1', 999, 6, 999, 999),
+      standing('Equipe Fictícia H2', 998, 6, 998, 998),
+      standing('Terceiro Libertadores Auxiliar', 997, 6, 997, 997),
+      standing('Equipe Fictícia H4', 996, 6, 996, 996),
+    ];
+    const fases = completeGroupFases();
+    for (let round = 1; round <= 6; round++) {
+      fases['Fase de Grupos'][`rodada_${round}`].groups.push({
+        name: 'GRUPO H',
+        matches: [{ team1: 'Equipe Fictícia H1', team2: 'Equipe Fictícia H2', score1: '', score2: '' }],
+      });
+    }
+    const result = resolveSulamericanaProgression(fases, { grupos }, [
+      { team: 'Libertadores Third 1', points: 15, wins: 3, goalDiff: 5, goalsFor: 50 },
+      { team: 'Libertadores Third 2', points: 14, wins: 3, goalDiff: 4, goalsFor: 49 },
+    ]);
+    const roundOf16 = result['Oitavas de Final'].matches;
+    expect(roundOf16).toHaveLength(8);
+    expect(roundOf16.some((match: any) => String(match.team1 + match.team2).includes('Fictícia'))).toBe(false);
+    expect(roundOf16.some((match: any) => String(match.team1 + match.team2).includes('Terceiro Libertadores Auxiliar'))).toBe(false);
+    expect(roundOf16.flatMap((match: any) => [match.team1, match.team2])).toContain('Libertadores Third 1');
+    expect(roundOf16.flatMap((match: any) => [match.team1, match.team2])).toContain('Libertadores Third 2');
+  });
+
 });
