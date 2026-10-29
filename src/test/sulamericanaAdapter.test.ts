@@ -181,15 +181,15 @@ describe('Sul-Americana progression', () => {
   it('fills the final and third-place match only after both semifinal winners are resolved', () => {
     const fases: any = {
       'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => {
-        const winners = ['Semi A', 'Semi B', 'Semi C', 'Semi D', 'QF A2', 'QF B2', 'QF A3', 'QF B3'];
+        const winners = ['Semi A', 'QF loser 0', 'Semi B', 'QF loser 1', 'Semi C', 'QF loser 2', 'Semi D', 'QF loser 3'];
         return {
           team1: winners[i], team2: `R16 B${i}`,
           scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
         };
       }) },
       'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({
-        team1: ['Semi A', 'Semi C', 'QF A2', 'QF A3'][i],
-        team2: ['Semi B', 'Semi D', 'QF B2', 'QF B3'][i],
+        team1: ['Semi A', 'Semi B', 'Semi C', 'Semi D'][i],
+        team2: ['QF loser 0', 'QF loser 1', 'QF loser 2', 'QF loser 3'][i],
         scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
       })) },
       Semifinal: { matches: [
