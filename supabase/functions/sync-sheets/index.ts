@@ -210,20 +210,27 @@ async function parseCopaBaseDados(accessToken: string, spreadsheetId: string) {
   const preRows = preValues.length > 1 ? preValues.slice(1) : [];
   const fase2Rows = fase2Values.length > 1 ? fase2Values.slice(1) : [];
 
-  // Preserve the source tab as metadata: the app needs to distinguish the 56
-  // preliminary entrants from the four teams invited directly to phase two.
-  // Keep the existing tab names for the current season; only the row payload gains
-  // a fourth internal column used by the API adapter.
-  const rows = [
-    ...preRows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
-      .map((row) => [row[0] ?? "", row[1] ?? "", row[2] ?? "", "preliminar"]),
-    ...fase2Rows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
-      .map((row) => [row[0] ?? "", row[1] ?? "", row[2] ?? "", "convidado"]),
-  ];
-  const headers = [...headerRow, "origem_interna"];
+  // Preserve the source tab as metadata so the new-season draw can distinguish
+  // the 56 preliminary entrants from the four invited teams. Keep deduplication,
+  // but key by Cartola ID when available so renaming a team does not create a
+  // duplicate roster entry. Existing tab names remain unchanged.
+  const merged = new Map<string, string[]>();
+  const addRows = (sourceRows: string[][], role: 'preliminar' | 'convidado') => {
+    for (const row of sourceRows) {
+      if (!row?.some((cell) => String(cell ?? '').trim() !== '')) continue;
+      const first = String(row[0] ?? '').trim();
+      const second = String(row[1] ?? '').trim();
+      const id = /^\\d{3,}$/.test(second) ? second : /^\\d{3,}$/.test(first) ? first : '';
+      const key = id ? `id:${id}` : `name:${first.toLowerCase()}`;
+      merged.set(key, [row[0] ?? '', row[1] ?? '', row[2] ?? '', role]);
+    }
+  };
+  addRows(preRows, 'preliminar');
+  addRows(fase2Rows, 'convidado');
+  const headers = [...headerRow, 'origem_interna'];
+  const rows = [...merged.values()];
   return { headers, rows, raw: [headers, ...rows] };
 }
-
 // Libertadores / Sulamericana classificacao
 async function parseLibertadoresClassificacao(accessToken: string, spreadsheetId: string, isSulamericana: boolean) {
   const values = await fetchSheetRange(accessToken, spreadsheetId, `'FASE DE GRUPOS'!A1:Y100`);
