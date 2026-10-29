@@ -220,8 +220,8 @@ export function useBaseDadosCopa(fase: string = '1ª Fase') {
   return useQuery<DadosExternosData>({
     queryKey: ['base-dados-copa', DEFAULT_SEASON, fase],
     queryFn: async () => {
-      // Keep the active 2026 season on its established sheet cache. The new-season
-      // flow reads API-normalized names/IDs/shields from the consolidated shadow cache.
+      // Copa do Brasil reads the API shadow cache for the 2026 final-round automation
+      // and for the new-season draw/progression introduced from 2027 onward.
       if (DEFAULT_SEASON >= 2026) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
         const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows as string[][] : [];
@@ -241,7 +241,7 @@ export function useConfrontosCopa(fase: string) {
   return useQuery<ConfrontosCopaData>({
     queryKey: ['confrontos-copa', DEFAULT_SEASON, fase],
     queryFn: async () => {
-      if (DEFAULT_SEASON >= 2027) {
+      if (DEFAULT_SEASON >= 2026) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
         // Once the consolidated cache exists, an empty/unfilled phase is intentional:
         // never fall back to the old sheet pairings and accidentally undo the draw.
