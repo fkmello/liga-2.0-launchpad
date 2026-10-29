@@ -1,5 +1,6 @@
 import type { AdapterContext, TournamentAdapter } from '../../tournament/types.ts';
 import { KnownProviders } from '../../sync/providers.ts';
+import { resolveLibertadoresBestThirds } from './adapter-libertadores.ts';
 import { fetchCartolaTeams, fetchMercadoStatus, fetchTeamsRoundScores, type CartolaTeamRaw } from './api-client.ts';
 
 type ContinentalMatch = Record<string, any>;
@@ -718,7 +719,13 @@ export const cartolaSulamericanaAdapter: TournamentAdapter<LibertadoresRaw> = {
     // A função não altera a fase Final enquanto os agregados não puderem ser determinados.
     const previousClassification = ctx.previous?.classificacao ?? { grupos: {} };
     const updatedClassification = resolveLibertadoresClassification(updatedFases, targetRound, previousClassification);
-    const progressedFases = resolveSulamericanaProgression(updatedFases, updatedClassification, ctx.relatedPayloads?.libertadores?.classificacao?.melhoresTerceiros as Array<{ team: string; points: number; wins: number; goalDiff: number; goalsFor: number }> | undefined);
+    // The persisted Libertadores cache stores classification rows, not the derived
+    // `melhoresTerceiros` field. Recompute the two qualifiers from the read-only related payload.
+    const libertadoresClassification = ctx.relatedPayloads?.libertadores?.classificacao;
+    const libertadoresBestThirds = libertadoresClassification
+      ? resolveLibertadoresBestThirds(libertadoresClassification)
+      : null;
+    const progressedFases = resolveSulamericanaProgression(updatedFases, updatedClassification, libertadoresBestThirds);
 
     return { fases: progressedFases, classificacao: updatedClassification, teams };
   },
