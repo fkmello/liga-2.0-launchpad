@@ -138,4 +138,89 @@ describe('Sul-Americana progression', () => {
     const result = resolveSulamericanaProgression(fases, { grupos }, []);
     expect(result['Oitavas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
   });
+
+  it('advances to semifinals only after all four quarter-final winners are resolved', () => {
+    const quarterfinals = Array.from({ length: 4 }, (_, i) => ({
+      team1: `QF A${i}`, team2: `QF B${i}`,
+      scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
+    }));
+    const fases: any = {
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
+        team1: `R16 A${i}`, team2: `R16 B${i}`,
+        scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
+      })) },
+      'Quartas de Final': { matches: quarterfinals },
+      Semifinal: { matches: Array.from({ length: 2 }, () => ({ team1: '', team2: '' })) },
+      Final: { matches: [
+        { matchNumber: 'FINAL', team1: '', team2: '' },
+        { matchNumber: '3º LUGAR', team1: '', team2: '' },
+      ] },
+    };
+    const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
+    expect(result.Semifinal.matches.map((match: any) => [match.team1, match.team2])).toEqual([
+      ['QF A0', 'QF A1'],
+      ['QF A2', 'QF A3'],
+    ]);
+
+    const incomplete = {
+      ...fases,
+      'Quartas de Final': { matches: quarterfinals.map((match, i) =>
+        i === 3 ? { ...match, scoreVolta1: '', scoreVolta2: '' } : match
+      ) },
+      Semifinal: { matches: [{ team1: 'Old SF A', team2: 'Old SF B' }, { team1: 'Old SF C', team2: 'Old SF D' }] },
+      Final: { matches: [{ matchNumber: 'FINAL', team1: 'Old Final A', team2: 'Old Final B' }, { matchNumber: '3º LUGAR', team1: 'Old 3rd A', team2: 'Old 3rd B' }] },
+    };
+    const blocked = resolveSulamericanaProgression(incomplete as any, { grupos: {} }, []);
+    expect(blocked.Semifinal.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+    expect(blocked.Final.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+  });
+
+  it('fills the final and third-place match only after both semifinal winners are resolved', () => {
+    const fases: any = {
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
+        team1: `R16 A${i}`, team2: `R16 B${i}`,
+        scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
+      })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({
+        team1: `QF A${i}`, team2: `QF B${i}`,
+        scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
+      })) },
+      Semifinal: { matches: [
+        { team1: 'Semi A', team2: 'Semi B', scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0' },
+        { team1: 'Semi C', team2: 'Semi D', scoreIda1: '0', scoreIda2: '1', scoreVolta1: '0', scoreVolta2: '1' },
+      ] },
+      Final: { matches: [
+        { matchNumber: 'FINAL', team1: '', team2: '' },
+        { matchNumber: '3º LUGAR', team1: '', team2: '' },
+      ] },
+    };
+    const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
+    expect([result.Final.matches[0].team1, result.Final.matches[0].team2]).toEqual(['Semi A', 'Semi D']);
+    expect([result.Final.matches[1].team1, result.Final.matches[1].team2]).toEqual(['Semi B', 'Semi C']);
+  });
+
+  it('clears stale final and third-place pairings when a semifinal is incomplete or tied', () => {
+    const fases: any = {
+      'Oitavas de Final': { matches: Array.from({ length: 8 }, (_, i) => ({
+        team1: `R16 A${i}`, team2: `R16 B${i}`,
+        scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
+      })) },
+      'Quartas de Final': { matches: Array.from({ length: 4 }, (_, i) => ({
+        team1: `QF A${i}`, team2: `QF B${i}`,
+        scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0',
+      })) },
+      Semifinal: { matches: [
+        { team1: 'Semi A', team2: 'Semi B', scoreIda1: '2', scoreIda2: '0', scoreVolta1: '1', scoreVolta2: '0' },
+        { team1: 'Semi C', team2: 'Semi D', scoreIda1: '1', scoreIda2: '0', scoreVolta1: '0', scoreVolta2: '1' },
+      ] },
+      Final: { matches: [
+        { matchNumber: 'FINAL', team1: 'Old Final A', team2: 'Old Final B', scoreIda1: '3', scoreIda2: '2' },
+        { matchNumber: '3º LUGAR', team1: 'Old 3rd A', team2: 'Old 3rd B', scoreIda1: '1', scoreIda2: '0' },
+      ] },
+    };
+    const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
+    expect(result.Final.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+    expect(result.Final.matches.every((match: any) => !match.scoreIda1 && !match.scoreIda2 && !match.scoreVolta1 && !match.scoreVolta2)).toBe(true);
+  });
+
 });
