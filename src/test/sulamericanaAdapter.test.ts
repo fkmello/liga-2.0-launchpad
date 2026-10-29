@@ -43,9 +43,9 @@ describe('Sul-Americana progression', () => {
     ]);
     expect(result['Oitavas de Final'].matches).toHaveLength(8);
     expect(result['Oitavas de Final'].matches[0].team1).toBe('Primeiro 0');
-    expect(result['Oitavas de Final'].matches[0].team2).toBe('Segundo 6');
-    expect(result['Oitavas de Final'].matches[7].team1).toBe('Segundo 6');
-    expect(result['Oitavas de Final'].matches[7].team2).toBe('Primeiro 0');
+    expect(result['Oitavas de Final'].matches[0].team2).toBe('Libertadores Third 2');
+    expect(result['Oitavas de Final'].matches[7].team1).toBe('Segundo 0');
+    expect(result['Oitavas de Final'].matches[7].team2).toBe('Segundo 1');
   });
 
   it('does not seed the bracket if the two Libertadores third-place qualifiers are unavailable', () => {
