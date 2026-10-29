@@ -3,8 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchFromCache, fetchWithFallback } from '@/lib/sheetsCache';
 import { isConsolidatedTournament, useTournamentPayload } from '@/hooks/useTournamentPayload';
 import type { StandingRow } from '@/types/tournament';
-import { USE_CONSOLIDATED_LIBERTADORES } from '@/config/featureFlags';
-import { DEFAULT_SEASON } from '@/config/tournamentCacheKeys';
+import { USE_CONSOLIDATED_LIBERTADORES, USE_CONSOLIDATED_SULAMERICANA } from '@/config/featureFlags';
+import { DEFAULT_SEASON, getTournamentCacheKey } from '@/config/tournamentCacheKeys';
 
 
 export interface Confronto {
@@ -350,16 +350,18 @@ export function useConfrontosLibertadores(fase: string) {
 export function useConfrontosSulamericanaGrupos(rodada: number) {
   return useQuery<LibertadoresGroupMatchesData>({
     queryKey: ['confrontos-sulamericana-grupos', rodada],
-    queryFn: () => fetchWithFallback<LibertadoresGroupMatchesData>(
-      'sulamericana',
-      { action: 'confrontos_sulamericana_grupos', rodada: rodada.toString() },
-      (d) => d?.grupos?.[`rodada_${rodada}`]
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        const round = shadow?.fases?.['Fase de Grupos']?.['rodada_' + rodada];
+        if (round && Array.isArray(round.groups)) return { tournament: String(round.tournament ?? ''), round: String(round.round ?? ('Rodada ' + rodada)), groups: round.groups };
+      }
+      return fetchWithFallback<LibertadoresGroupMatchesData>('sulamericana', { action: 'confrontos_sulamericana_grupos', rodada: rodada.toString() }, (d) => d?.grupos?.['rodada_' + rodada]);
+    },
     staleTime: 5 * 60 * 1000,
     enabled: rodada >= 1 && rodada <= 6,
   });
 }
-
 export function useDadosExternosSulamericana() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-sulamericana'],
