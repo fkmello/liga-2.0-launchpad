@@ -45,7 +45,12 @@ describe('Sul-Americana progression', () => {
     ]);
     expect(result['Oitavas de Final'].matches).toHaveLength(8);
     expect(result['Oitavas de Final'].matches[0].team1).toBe('Primeiro 0');
+    // Libertadores third-place teams are repechage seeds 15 and 16,
+    // regardless of their stats compared with Sul-Americana qualifiers.
     expect(result['Oitavas de Final'].matches[0].team2).toBe('Libertadores Third 2');
+    expect(result['Oitavas de Final'].matches[1].team1).toBe('Primeiro 1');
+    expect(result['Oitavas de Final'].matches[1].team2).toBe('Libertadores Third 1');
+    expect(result['Oitavas de Final'].matches[2].team1).toBe('Primeiro 2');
     expect(result['Oitavas de Final'].matches[7].team1).toBe('Segundo 0');
     expect(result['Oitavas de Final'].matches[7].team2).toBe('Segundo 1');
   });
