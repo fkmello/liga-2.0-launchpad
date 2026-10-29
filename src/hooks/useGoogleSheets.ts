@@ -398,15 +398,20 @@ export function useClassificacaoSulamericana() {
 export function useConfrontosSulamericana(fase: string) {
   return useQuery<ConfrontosCopaData>({
     queryKey: ['confrontos-sulamericana', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'sulamericana',
-      { action: 'confrontos_sulamericana', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryFn: async () => {
+      if (USE_CONSOLIDATED_SULAMERICANA) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('sulamericana', DEFAULT_SEASON));
+        if (shadow?.fases && typeof shadow.fases === 'object' && !Array.isArray(shadow.fases)) {
+          const phase = shadow.fases[fase];
+          if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
+          return { fase, rodadaInfo: '', matches: [] };
+        }
+      }
+      return fetchWithFallback<ConfrontosCopaData>('sulamericana', { action: 'confrontos_sulamericana', fase }, (d) => d?.fases?.[fase]);
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
-
 export function useDadosExternosIntercontinental() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-intercontinental'],
