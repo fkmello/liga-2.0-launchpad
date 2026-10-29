@@ -209,24 +209,45 @@ export function useClassificacao(league: string = 'serie_a'): ClassificacaoResul
 
 export function useBaseDadosCopa(fase: string = '1ª Fase') {
   return useQuery<DadosExternosData>({
-    queryKey: ['base-dados-copa', fase],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'copa:brasil',
-      { action: 'base_dados_copa', fase },
-      (d) => d?.dados_externos
-    ),
+    queryKey: ['base-dados-copa', DEFAULT_SEASON, fase],
+    queryFn: async () => {
+      // Keep the active 2026 season on its established sheet cache. The new-season
+      // flow reads API-normalized names/IDs/shields from the consolidated shadow cache.
+      if (DEFAULT_SEASON >= 2027) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
+        if (Array.isArray(shadow?.dados_externos?.rows) && shadow.dados_externos.rows.length > 0) {
+          const rows = shadow.dados_externos.rows as string[][];
+          return { headers: [], rows, raw: rows };
+        }
+      }
+      return fetchWithFallback<DadosExternosData>(
+        'copa:brasil',
+        { action: 'base_dados_copa', fase },
+        (d) => d?.dados_externos
+      );
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
 
 export function useConfrontosCopa(fase: string) {
   return useQuery<ConfrontosCopaData>({
-    queryKey: ['confrontos-copa', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'copa:brasil',
-      { action: 'confrontos_copa', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryKey: ['confrontos-copa', DEFAULT_SEASON, fase],
+    queryFn: async () => {
+      if (DEFAULT_SEASON >= 2027) {
+        const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
+        // Once the consolidated cache exists, an empty/unfilled phase is intentional:
+        // never fall back to the old sheet pairings and accidentally undo the draw.
+        if (shadow && shadow.fases && typeof shadow.fases === 'object') {
+          return shadow.fases[fase] ?? { fase, rodadaInfo: '', matches: [] };
+        }
+      }
+      return fetchWithFallback<ConfrontosCopaData>(
+        'copa:brasil',
+        { action: 'confrontos_copa', fase },
+        (d) => d?.fases?.[fase]
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
