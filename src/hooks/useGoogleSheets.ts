@@ -222,7 +222,7 @@ export function useBaseDadosCopa(fase: string = '1ª Fase') {
     queryFn: async () => {
       // Keep the active 2026 season on its established sheet cache. The new-season
       // flow reads API-normalized names/IDs/shields from the consolidated shadow cache.
-      if (DEFAULT_SEASON >= 2027) {
+      if (DEFAULT_SEASON >= 2026) {
         const shadow = await fetchFromCache<any>(getTournamentCacheKey('copa_brasil', DEFAULT_SEASON));
         const rows = Array.isArray(shadow?.dados_externos?.rows) ? shadow.dados_externos.rows as string[][] : [];
         return { headers: [], rows, raw: rows };
