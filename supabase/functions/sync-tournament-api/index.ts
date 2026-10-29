@@ -196,6 +196,29 @@ Deno.serve(async (req) => {
       relatedPayloads.libertadores = await libertadoresRepo.load(shadowKey('libertadores', resolvedSeason));
     }
 
+    // For the new Copa do Brasil season, refresh only participant rows from the
+    // spreadsheet cache. Keep the active API cache's phases/history untouched.
+    let previousDataOverride: { rows: unknown[] } | undefined;
+    if (baseDef.league === 'copa_brasil' && resolvedSeason >= 2027) {
+      const legacyCopa = await legacyReader('copa:brasil');
+      const sourceRows = legacyCopa?.dados_externos?.rows;
+      const ids = Array.isArray(sourceRows)
+        ? sourceRows.map((row: any) => {
+            const cells = Array.isArray(row) ? row : [row?.id_cartola ?? row?.id];
+            const candidate = cells[1] && /^\\d{3,}$/.test(String(cells[1]).trim())
+              ? cells[1]
+              : cells.find((cell: unknown) => /^\\d{3,}$/.test(String(cell ?? '').trim()));
+            return candidate === undefined ? '' : String(candidate).trim();
+          })
+        : [];
+      // Fail closed: a partial/empty spreadsheet import must not replace the known roster.
+      if (Array.isArray(sourceRows) && sourceRows.length === 60 && ids.every(Boolean) && new Set(ids).size === 60) {
+        previousDataOverride = { rows: sourceRows };
+      } else if (Array.isArray(sourceRows) && sourceRows.length > 0) {
+        console.warn('[copa_brasil] roster refresh skipped: expected 60 unique Cartola IDs');
+      }
+    }
+
     const result = await runPipeline(def, resolvedSeason, scope, repo, {
       dryRun,
       compare,
@@ -203,6 +226,7 @@ Deno.serve(async (req) => {
       syncedBy,
       authMode,
       relatedPayloads,
+      previousDataOverride,
     });
 
 
