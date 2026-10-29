@@ -541,6 +541,12 @@ export function resolveLibertadoresProgression(
         return match;
       });
       next = { ...next, Final: { ...final, matches } };
+    } else {
+      // Semifinals are not complete: do not leave stale final/third-place teams or scores.
+      const matches = final.matches.map((match: ContinentalMatch) =>
+        match?.team1 || match?.team2 ? replaceMatchTeams(match, '', '') : match
+      );
+      next = { ...next, Final: { ...final, matches } };
     }
   }
   return next;
