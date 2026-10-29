@@ -205,9 +205,9 @@ Deno.serve(async (req) => {
       const ids = Array.isArray(sourceRows)
         ? sourceRows.map((row: any) => {
             const cells = Array.isArray(row) ? row : [row?.id_cartola ?? row?.id];
-            const candidate = cells[1] && /^\\d{3,}$/.test(String(cells[1]).trim())
+            const candidate = cells[1] && /^\d{3,}$/.test(String(cells[1]).trim())
               ? cells[1]
-              : cells.find((cell: unknown) => /^\\d{3,}$/.test(String(cell ?? '').trim()));
+              : cells.find((cell: unknown) => /^\d{3,}$/.test(String(cell ?? '').trim()));
             return candidate === undefined ? '' : String(candidate).trim();
           })
         : [];
