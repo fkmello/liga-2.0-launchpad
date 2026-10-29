@@ -1,7 +1,11 @@
-import { useTournamentFinished } from '@/hooks/useTournamentFinished';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { DEFAULT_SEASON, getTournamentCacheKey } from '@/config/tournamentCacheKeys';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trophy, Loader2, AlertCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useConfrontosCopa, useBaseDadosCopa } from '@/hooks/useGoogleSheets';
@@ -57,8 +61,9 @@ const getFaseInicial = (rodada?: number): string => {
 };
 
 const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercado, slug, initialFase }: CupRoundMatchesProps) => {
-  const { finished } = useTournamentFinished(slug);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
   const userIds = useUserTeamIds();
   const { teamNames: userTeamNames } = useUserTeamNames();
   const hasInitialFaseFromUrl = !!initialFase && FASES.includes(initialFase);
@@ -170,6 +175,71 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
     return { scores, played };
   }, [partialData]);
 
+  const parseTieScore = (value: unknown): number | null => {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    const score = Number(String(value).replace(',', '.'));
+    return Number.isFinite(score) ? score : null;
+  };
+
+  const hasUnresolvedTie = (match: NonNullable<typeof data>['matches'][number]) => {
+    if (match.manualWinner || !match.team1 || !match.team2) return false;
+    const score1Ida = parseTieScore(match.scoreIda1);
+    const score2Ida = parseTieScore(match.scoreIda2);
+    if (score1Ida === null || score2Ida === null) return false;
+    if (fase === 'Final') return score1Ida === score2Ida;
+    const score1Volta = parseTieScore(match.scoreVolta1);
+    const score2Volta = parseTieScore(match.scoreVolta2);
+    if (score1Volta === null || score2Volta === null) return false;
+    return score1Ida + score1Volta === score2Ida + score2Volta;
+  };
+
+  const saveManualWinner = async (matchNumber: string, winner: string) => {
+    if (!isAdmin || DEFAULT_SEASON !== 2026 || !winner) return;
+    try {
+      const cacheKey = getTournamentCacheKey('copa_brasil', DEFAULT_SEASON);
+      const { data: row, error: readError } = await supabase
+        .from('sheets_cache')
+        .select('data')
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!row?.data) throw new Error('Cache da Copa do Brasil 2026 não encontrado.');
+      const payload = row.data as any;
+      const phase = payload.fases?.[fase];
+      const match = phase?.matches?.find((item: any) => String(item.matchNumber) === String(matchNumber));
+      if (!match || ![match.team1, match.team2].includes(winner)) {
+        throw new Error('O confronto mudou antes de salvar. Atualize a fase e tente novamente.');
+      }
+      match.manualWinner = winner;
+      const { error: saveError } = await supabase
+        .from('sheets_cache')
+        .update({ data: payload })
+        .eq('cache_key', cacheKey);
+      if (saveError) throw saveError;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Sua sessão expirou. Entre novamente e tente salvar a decisão.');
+      const apiUrl = import.meta.env.VITE_SUPABASE_URL;
+      const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const targetRound = fase === 'Final' ? 38 : 35;
+      const response = await fetch(
+        `${apiUrl}/functions/v1/sync-tournament-api?league=copa_brasil&season=2026&persist=true&scope=rodada&rodada=${targetRound}`,
+        { method: 'POST', headers: { apikey: apiKey, Authorization: `Bearer ${accessToken}` } },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true) {
+        throw new Error(String(result.error ?? 'A decisão foi salva, mas não foi possível recalcular os confrontos agora.'));
+      }
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-copa', DEFAULT_SEASON, fase] });
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-copa', DEFAULT_SEASON] });
+      toast.success(`Classificação manual registrada: ${winner}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível salvar o vencedor manual.');
+      await queryClient.invalidateQueries({ queryKey: ['confrontos-copa', DEFAULT_SEASON, fase] });
+    }
+  };
+
   const handleMatchClick = (id1: string, id2: string) => {
     if (!rodadaBase || !statusMercado) return;
     const rodadaComparison = statusMercado === 1 ? rodadaBase - 1 : rodadaBase;
@@ -239,20 +309,36 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
               const pc2 = id2 ? partialScores.played.get(id2) : undefined;
 
               return (
-                <CupMatchCard
-                  key={`${match.matchNumber}-${idx}`}
-                  match={match}
-                  badgeUrls={badgeUrls}
-                  isFinal={data?.isFinal}
-                  isUserTeam={isUserTeam}
-                  disabled={!isEnabled}
-                  onMatchClick={hasIds ? () => handleMatchClick(id1!, id2!) : undefined}
-                  activeLeg={activeLeg}
-                  partialScore1={ps1}
-                  partialScore2={ps2}
-                  playedCount1={pc1}
-                  playedCount2={pc2}
-                />
+                <div key={`${match.matchNumber}-${idx}`} className="space-y-2">
+                  <CupMatchCard
+                    match={match}
+                    badgeUrls={badgeUrls}
+                    isFinal={data?.isFinal}
+                    isUserTeam={isUserTeam}
+                    disabled={!isEnabled}
+                    onMatchClick={hasIds ? () => handleMatchClick(id1!, id2!) : undefined}
+                    activeLeg={activeLeg}
+                    partialScore1={ps1}
+                    partialScore2={ps2}
+                    playedCount1={pc1}
+                    playedCount2={pc2}
+                  />
+                  {DEFAULT_SEASON === 2026 && isAdmin && hasUnresolvedTie(match) && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Empate {fase === 'Final' ? 'no jogo único' : 'no placar agregado'}. Selecione manualmente quem avança.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => void saveManualWinner(match.matchNumber, match.team1)}>
+                          Classificar {match.team1}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => void saveManualWinner(match.matchNumber, match.team2)}>
+                          Classificar {match.team2}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })
           ) : (
@@ -262,7 +348,7 @@ const CupRoundMatches = ({ isUserTeam: _isUserTeamProp, rodadaBase, statusMercad
           )}
 
           {/* Podium */}
-          {finished && data.podium && data.podium.some(p => p.team) && (
+          {data.podium && data.podium.some(p => p.team) && (
             <div className="mt-6 space-y-3">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Trophy className="w-5 h-5 text-yellow-500" />

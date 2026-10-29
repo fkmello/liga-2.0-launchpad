@@ -113,6 +113,110 @@ export function updateCopaBrasilFases(
   return next;
 }
 
+
+function parseCopaScore(value: unknown): number | null {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const score = Number(String(value).replace(',', '.'));
+  return Number.isFinite(score) ? score : null;
+}
+
+function resolveCopaTwoLegMatch(match: CupMatch): { winner: string; loser: string } | null {
+  if (!match?.team1 || !match?.team2) return null;
+  if (match.manualWinner === match.team1) return { winner: match.team1, loser: match.team2 };
+  if (match.manualWinner === match.team2) return { winner: match.team2, loser: match.team1 };
+  const ida1 = parseCopaScore(match.scoreIda1);
+  const ida2 = parseCopaScore(match.scoreIda2);
+  const volta1 = parseCopaScore(match.scoreVolta1);
+  const volta2 = parseCopaScore(match.scoreVolta2);
+  if (ida1 === null || ida2 === null || volta1 === null || volta2 === null) return null;
+  const total1 = ida1 + volta1;
+  const total2 = ida2 + volta2;
+  if (total1 === total2) return null;
+  return total1 > total2
+    ? { winner: match.team1, loser: match.team2 }
+    : { winner: match.team2, loser: match.team1 };
+}
+
+function resolveCopaSingleMatch(match: CupMatch): { winner: string; loser: string } | null {
+  if (!match?.team1 || !match?.team2) return null;
+  if (match.manualWinner === match.team1) return { winner: match.team1, loser: match.team2 };
+  if (match.manualWinner === match.team2) return { winner: match.team2, loser: match.team1 };
+  const score1 = parseCopaScore(match.scoreIda1);
+  const score2 = parseCopaScore(match.scoreIda2);
+  if (score1 === null || score2 === null || score1 === score2) return null;
+  return score1 > score2
+    ? { winner: match.team1, loser: match.team2 }
+    : { winner: match.team2, loser: match.team1 };
+}
+
+/** Progressão limitada a 2026: preserva o sorteio existente e só preenche a final após a volta. */
+export function resolveCopaBrasil2026Final(fases: CupFases, teams: CartolaTeamRaw[]): CupFases {
+  let nextFases: CupFases = { ...fases };
+  const semis = nextFases['Semifinal']?.matches;
+  const finalPhase = nextFases['Final'];
+  const badgeByName = new Map(teams.map((team) => [normalizeName(team.nome), team.escudo ?? '']));
+
+  if (Array.isArray(semis) && semis.length === 2 &&
+      Array.isArray(finalPhase?.matches) && finalPhase.matches.length >= 2) {
+    const results = semis.map(resolveCopaTwoLegMatch);
+    if (results.every(Boolean)) {
+      const matches = finalPhase.matches.map((match: CupMatch) => {
+        const thirdPlace = normalizeName(match.matchNumber).includes('3') ||
+          normalizeName(match.matchNumber).includes('terceirolugar');
+        const team1 = thirdPlace ? results[0]!.loser : results[0]!.winner;
+        const team2 = thirdPlace ? results[1]!.loser : results[1]!.winner;
+        const samePair = match.team1 === team1 && match.team2 === team2;
+        const updated: CupMatch = {
+          ...match,
+          team1,
+          team2,
+          team1Badge: badgeByName.get(normalizeName(team1)) ?? '',
+          team2Badge: badgeByName.get(normalizeName(team2)) ?? '',
+        };
+        if (!samePair) {
+          updated.scoreIda1 = '';
+          updated.scoreIda2 = '';
+          updated.scoreVolta1 = '';
+          updated.scoreVolta2 = '';
+          delete updated.manualWinner;
+        }
+        return updated;
+      });
+      nextFases = { ...nextFases, Final: { ...finalPhase, isFinal: true, matches } };
+    }
+  }
+
+  const currentFinal = nextFases['Final'];
+  if (!Array.isArray(currentFinal?.matches)) return nextFases;
+  const finalMatch = currentFinal.matches.find((match: CupMatch) =>
+    normalizeName(match.matchNumber).includes('final') && !normalizeName(match.matchNumber).includes('lugar')
+  );
+  const thirdPlaceMatch = currentFinal.matches.find((match: CupMatch) =>
+    normalizeName(match.matchNumber).includes('3') || normalizeName(match.matchNumber).includes('terceirolugar')
+  );
+  const finalResult = finalMatch ? resolveCopaSingleMatch(finalMatch) : null;
+  const thirdResult = thirdPlaceMatch ? resolveCopaSingleMatch(thirdPlaceMatch) : null;
+  if (finalResult && thirdResult) {
+    return {
+      ...nextFases,
+      Final: {
+        ...currentFinal,
+        isFinal: true,
+        podium: [
+          { position: 1, team: finalResult.winner, badge: badgeByName.get(normalizeName(finalResult.winner)) ?? '' },
+          { position: 2, team: finalResult.loser, badge: badgeByName.get(normalizeName(finalResult.loser)) ?? '' },
+          { position: 3, team: thirdResult.winner, badge: badgeByName.get(normalizeName(thirdResult.winner)) ?? '' },
+        ],
+      },
+    };
+  }
+  if (currentFinal.podium) {
+    const { podium: _oldPodium, ...withoutPodium } = currentFinal;
+    return { ...nextFases, Final: { ...withoutPodium, isFinal: true } };
+  }
+  return { ...nextFases, Final: { ...currentFinal, isFinal: true } };
+}
+
 export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
   id: 'cartola_brasileirao_copa_brasil_v1',
   provider: KnownProviders.CARTOLA_BRASILEIRAO,
@@ -165,8 +269,11 @@ export const cartolaCopaBrasilAdapter: TournamentAdapter<CopaBrasilRaw> = {
       buildIdByName(ctx),
       onlyPhase,
     );
+    const progressedFases = ctx.season === 2026 && ctx.scope.kind !== 'dados_externos'
+      ? resolveCopaBrasil2026Final(updatedFases, teams)
+      : updatedFases;
 
-    return { fases: updatedFases, teams };
+    return { fases: progressedFases, teams };
   },
 
   toFases(raw) {

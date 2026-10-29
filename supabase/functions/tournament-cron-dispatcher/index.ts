@@ -82,10 +82,11 @@ async function patchState(db: Db, id: string, patch: Record<string, unknown>) {
   if (error) console.error('[cron-dispatcher] falha ao gravar estado:', error.message);
 }
 
-async function callSync(baseUrl: string, secret: string, league: string, season: number) {
+async function callSync(baseUrl: string, secret: string, league: string, season: number, targetRound?: number) {
+  const roundScope = targetRound === undefined ? '' : `&scope=rodada&rodada=${targetRound}`;
   const url =
     `${baseUrl}/functions/v1/sync-tournament-api` +
-    `?league=${encodeURIComponent(league)}&season=${season}&persist=true`;
+    `?league=${encodeURIComponent(league)}&season=${season}&persist=true${roundScope}`;
 
   const res = await fetch(url, {
     method: 'POST',
@@ -188,6 +189,80 @@ Deno.serve(async (req) => {
         error: null,
         ...extra,
       });
+
+    // A rodada 38 é a última do Brasileirão; não existe rodada 39 para disparar
+    // a sincronização normal. A Copa do Brasil 2026 sincroniza a final após o
+    // encerramento do mercado e repete a consulta após o intervalo padrão.
+    if (league === 'copa_brasil' && season === 2026 &&
+        status === MARKET_FINISHED && round === 38) {
+      if (state.current_round !== 38 || !state.market_opened_at) {
+        await patchState(db, state.id, {
+          market_status: status,
+          current_round: 38,
+          market_opened_at: new Date().toISOString(),
+          first_sync_at: null,
+          second_sync_done: false,
+          last_sync_phase: 'NONE',
+          last_sync_status: 'SKIPPED',
+        });
+        push('MARKET_OPENED', { target_round: 38, reason: 'FINAL_ROUND_SYNC_WINDOW' });
+        continue;
+      }
+
+      if (!state.first_sync_at) {
+        const elapsed = minutesSince(state.market_opened_at) ?? 0;
+        if (elapsed < firstDelay) {
+          await patchState(db, state.id, { market_status: status, last_sync_status: 'SKIPPED' });
+          push('WAIT_WINDOW', { target_round: 38, reason: 'FINAL_ROUND_SYNC_WINDOW' });
+          continue;
+        }
+        try {
+          const syncResult = await callSync(supabaseUrl, cronSecret, league, season, 38);
+          await patchState(db, state.id, {
+            market_status: status, current_round: 38, synced_round: 38,
+            first_sync_at: new Date().toISOString(), second_sync_done: false,
+            last_sync_phase: 'SYNC_1', last_sync_status: 'SUCCESS',
+            last_error: null, last_error_at: null,
+          });
+          push('SYNC_1', {
+            target_round: 38, reason: 'FINAL_ROUND_SYNC_WINDOW',
+            persisted: syncResult.persisted === true, changed: syncResult.changed === true,
+            sync_hash: typeof syncResult.hash === 'string' ? syncResult.hash : null,
+            records_processed: typeof syncResult.records_processed === 'number' ? syncResult.records_processed : null,
+            last_sync_status: 'SUCCESS', last_sync_phase: 'SYNC_1',
+          });
+        } catch (e) {
+          await fail('SYNC_ERROR', e);
+        }
+        continue;
+      }
+
+      const sinceFirst = minutesSince(state.first_sync_at);
+      if (!state.second_sync_done && sinceFirst !== null && sinceFirst >= secondDelay) {
+        try {
+          const syncResult = await callSync(supabaseUrl, cronSecret, league, season, 38);
+          await patchState(db, state.id, {
+            market_status: status, current_round: 38, synced_round: 38,
+            second_sync_done: true, last_sync_phase: 'SYNC_2',
+            last_sync_status: 'SUCCESS', last_error: null, last_error_at: null,
+          });
+          push('SYNC_2', {
+            target_round: 38, reason: 'FINAL_ROUND_SYNC_WINDOW',
+            persisted: syncResult.persisted === true, changed: syncResult.changed === true,
+            sync_hash: typeof syncResult.hash === 'string' ? syncResult.hash : null,
+            records_processed: typeof syncResult.records_processed === 'number' ? syncResult.records_processed : null,
+            last_sync_status: 'SUCCESS', last_sync_phase: 'SYNC_2',
+          });
+        } catch (e) {
+          await fail('SYNC_ERROR', e);
+        }
+        continue;
+      }
+
+      await patchState(db, state.id, { market_status: status, last_sync_status: 'SKIPPED' });
+      push('SKIP_DONE', { target_round: 38, reason: 'FINAL_ROUND_SYNC_WINDOW' });
+      continue;
+    }
 
     // ── Manutenção / encerrado: nenhuma decisão ──
     if (status === MARKET_MAINTENANCE || status === MARKET_FINISHED) {
