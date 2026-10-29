@@ -583,16 +583,10 @@ export function resolveSulamericanaProgression(
     const groupQualifiers = qualifiedGroupTeams(classification, 14);
     const thirdTeams = Array.isArray(libertadoresBestThirds) ? libertadoresBestThirds : [];
     if (groupQualifiers && thirdTeams.length === 2 && thirdTeams.every(team => !!team.team)) {
+      // The 14 Sul-Americana group qualifiers are ranked first. The two
+      // Libertadores teams enter as repechage places 15 and 16, in best-third order.
+      // They are intentionally not compared by their group-stage stats with Sula teams.
       const all = [...groupQualifiers, ...thirdTeams.map(team => ({ ...team, group: 'Libertadores' }))];
-      const globalOrder = classification.desempatesManuais?.global ?? [];
-      all.sort((a, b) => compareStanding(a, b) ||
-        ((globalOrder.indexOf(a.team) < 0 ? 999 : globalOrder.indexOf(a.team)) -
-         (globalOrder.indexOf(b.team) < 0 ? 999 : globalOrder.indexOf(b.team))));
-      for (let i = 1; i < all.length; i++) {
-        if (compareStanding(all[i - 1], all[i]) === 0 &&
-            (!globalOrder.includes(all[i - 1].team) || !globalOrder.includes(all[i].team) ||
-             globalOrder.indexOf(all[i - 1].team) === globalOrder.indexOf(all[i].team))) return next;
-      }
       const phase = next['Oitavas de Final'];
       if (Array.isArray(phase?.matches) && phase.matches.length === 8) {
         const matches = phase.matches.map((match: ContinentalMatch, index: number) =>
