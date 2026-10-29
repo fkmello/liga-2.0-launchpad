@@ -138,9 +138,10 @@ type CopaEntrant = { name: string; id: string; slot: number };
 
 function phaseHasAnyScore(phase: any): boolean {
   return (phase?.matches ?? []).some((match: any) =>
-    ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2'].some((field) =>
-      match[field] !== null && match[field] !== undefined && String(match[field]).trim() !== ''
-    )
+    ['scoreIda1', 'scoreIda2', 'scoreVolta1', 'scoreVolta2'].some((field) => {
+      const value = String(match[field] ?? '').trim();
+      return value !== '' && value !== '-' && value !== '—';
+    })
   );
 }
 
