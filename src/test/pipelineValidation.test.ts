@@ -496,4 +496,54 @@ describe('pipeline validation indicators', () => {
     });
     expect(report.standings_generated).toBe(1);
   });
+  it('counts Sul-Americana as 28 teams in groups A-G and ignores the auxiliary group H', () => {
+    const groups: Record<string, unknown[]> = {};
+    for (let groupIndex = 0; groupIndex < 7; groupIndex++) {
+      const groupName = `GRUPO ${String.fromCharCode(65 + groupIndex)}`;
+      groups[groupName] = Array.from({ length: 4 }, (_, teamIndex) => [
+        String(teamIndex + 1), '', `Time ${groupIndex}-${teamIndex}`, '0', '0', '0', '0', '0', '0,00', '0,00',
+      ]);
+    }
+    groups['GRUPO H'] = Array.from({ length: 4 }, (_, teamIndex) => [
+      String(teamIndex + 1), '', `Auxiliar H-${teamIndex}`, '0', '0', '0', '0', '0', '0,00', '0,00',
+    ]);
+    const payload = {
+      classificacao: { grupos },
+      dados_externos: { rows: Array.from({ length: 32 }, (_, i) => [`Time externo ${i}`, String(i + 1), '']) },
+      fases: {},
+    };
+    const report = buildCoverageReport({
+      league: 'sulamericana',
+      baseline: payload as any,
+      generated: payload as any,
+      matches: [],
+      standings: {},
+    });
+
+    expect(report.teams_expected).toBe(28);
+    expect(report.teams_loaded).toBe(28);
+    expect(report.standings_expected).toBe(28);
+    expect(report.standings_generated).toBe(28);
+    expect(report.missing_teams).toEqual([]);
+  });
+
+  it('ignores the legacy group H when comparing Sul-Americana standings', () => {
+    const baseline = {
+      classificacao: {
+        grupos: {
+          'GRUPO A': [oldRow],
+          'GRUPO H': [['1', '', 'Auxiliar H', '12', '6', '4', '0', '2', '28,00']],
+        },
+      },
+    };
+    const generated = {
+      grupos: {
+        'GRUPO A': [newRow],
+        'GRUPO H': [['1', '', 'Auxiliar H', '0', '0', '0', '0', '0', '0,00', '0,00']],
+      },
+    };
+
+    expect(diffLibertadoresClassification(baseline as any, generated as any, ['H', 'GRUPO H'])).toEqual([]);
+  });
+
 });
