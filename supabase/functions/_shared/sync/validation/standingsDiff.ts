@@ -141,18 +141,22 @@ function parseLibertadoresClassificationRow(row: unknown): LibertadoresClassific
 }
 
 /**
- * Compara o contrato específico da Libertadores (não os índices genéricos das
- * ligas). O cache antigo não contém pontos pró; esse campo só é comparado se
- * também existir na classificação de referência.
+ * Compara o contrato de classificação dos torneios continentais (não os índices
+ * genéricos das ligas). O cache antigo não contém pontos pró; esse campo só é
+ * comparado se também existir na classificação de referência. Permite ignorar
+ * grupos auxiliares legados, como o grupo H na Sul-Americana.
  */
 export function diffLibertadoresClassification(
   baseline: TournamentCachePayload | null,
   generatedClassification: TournamentCachePayload['classificacao'] | null | undefined,
+  excludedGroups: string[] = [],
 ): StandingsDivergence[] {
   if (!baseline?.classificacao?.grupos || !generatedClassification?.grupos) return [];
 
+  const excluded = new Set(excludedGroups.map(normalizeName));
   const base = new Map<string, LibertadoresClassificationRow>();
-  for (const rows of Object.values(baseline.classificacao.grupos)) {
+  for (const [groupName, rows] of Object.entries(baseline.classificacao.grupos)) {
+    if (excluded.has(normalizeName(groupName))) continue;
     for (const raw of Array.isArray(rows) ? rows as unknown[] : []) {
       const row = parseLibertadoresClassificationRow(raw);
       if (row) base.set(normalizeName(row.name), row);
@@ -161,7 +165,8 @@ export function diffLibertadoresClassification(
 
   const divergences: StandingsDivergence[] = [];
   const generatedNames = new Set<string>();
-  for (const rows of Object.values(generatedClassification.grupos)) {
+  for (const [groupName, rows] of Object.entries(generatedClassification.grupos)) {
+    if (excluded.has(normalizeName(groupName))) continue;
     for (const raw of Array.isArray(rows) ? rows as unknown[] : []) {
       const calculated = parseLibertadoresClassificationRow(raw);
       if (!calculated) continue;
