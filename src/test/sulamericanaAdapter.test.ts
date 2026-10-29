@@ -99,7 +99,9 @@ describe('Sul-Americana progression', () => {
       Final: { matches: [{ matchNumber: 'FINAL', team1: '', team2: '' }, { matchNumber: '3º LUGAR', team1: '', team2: '' }] },
     };
     const result = resolveSulamericanaProgression(fases, { grupos: {} }, []);
-    expect(result['Quartas de Final'].matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
+    expect(result['Quartas de Final'].matches.map((match: any) => [match.team1, match.team2])).toEqual(
+      Array.from({ length: 4 }, (_, i) => [`Quartas A${i}`, `Quartas B${i}`]),
+    );
     expect(result.Semifinal.matches.every((match: any) => !match.team1 && !match.team2)).toBe(true);
   });
 
