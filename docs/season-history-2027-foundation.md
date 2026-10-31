@@ -107,3 +107,20 @@ A lista acima é apenas um retrato da configuração atual, não uma lista fixa 
 - `tournament_settings` registra habilitação e finalização, mas não deve ser a fonte histórica exclusiva: configurações podem mudar entre temporadas.
 - `src/hooks/useGoogleSheets.ts` confirma contratos diferentes para ranking, classificação, confrontos, fases de grupos e mata-mata. A camada histórica deve preservar o snapshot bruto original e extrair campos normalizados quando possível.
 - Nenhuma migration, tabela, policy RLS, chamada à API ou alteração de produção foi realizada nesta auditoria.
+
+
+## Regras de escopo confirmadas pelo administrador — 31/10/2026
+
+### Ranking da liga
+- O histórico permanente deve guardar a classificação anual completa de todos os participantes, não apenas o top 10.
+- Primeiro turno, segundo turno e rankings mensais continuam sendo exibidos durante a temporada corrente para acompanhamento e premiação, mas ficam fora do arquivo histórico permanente por enquanto.
+- O número de participantes não deve ser fixado em 60: o arquivo deve aceitar o total de equipes existente em cada temporada.
+
+### Champions League e Copa do Mundo
+- A Champions League de 2026 foi um torneio separado, alimentado por API própria e jogadores da competição europeia.
+- Para 2027, o administrador considera reaproveitar a estrutura/experiência da Champions, mas como um torneio adicional dentro da liga principal, usando a API do Brasileirão. Isso ainda é uma decisão futura, não deve ser presumido nem habilitado agora.
+- O histórico deve permitir que o torneio seja exibido sob o mesmo nome ao longo dos anos, preservando em cada temporada a origem da API e o formato/fonte dos dados. Assim, não se confunde a edição independente de 2026 com uma possível edição integrada a partir de 2027.
+- A Copa do Mundo de 2026 foi uma competição separada, com API própria, e tem periodicidade de quatro anos. A continuidade depende de eventual disponibilização futura da API pela Globo. Não criar temporadas futuras fictícias; preservar a edição de 2026 e só adicionar outra quando efetivamente existir.
+
+### Política de catálogo histórico
+O catálogo não deve ser uma lista fixa de torneios codificada para sempre. Cada arquivo de temporada registra os torneios efetivamente disputados naquela temporada, com identificador estável, nome apresentado, origem da API, formato e status. Um torneio novo começa seu histórico na primeira temporada em que for disputado; um torneio encerrado mantém os arquivos anteriores.
