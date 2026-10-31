@@ -185,3 +185,40 @@ Não escolher ainda um cache como substituto integral do outro. Para o snapshot 
 4. registrar explicitamente a fonte escolhida para cada conjunto de dados e eventuais correções manuais.
 
 A comparação foi somente leitura. Nenhum cache, tabela, código funcional, migration, sincronização ou deploy foi alterado.
+
+
+### Comparação detalhada dos dados externos e classificação — 31/10/2026
+
+Nova comparação linha a linha, somente leitura, entre os arrays `dados_externos.rows` dos dois caches:
+
+- Os dois registros têm 32 linhas e a mesma sequência de nomes e IDs Cartola.
+- Não foi encontrada diferença de nome nem de ID entre as linhas correspondentes.
+- Exatamente dois registros diferem apenas na URL do escudo:
+  - `ferre-ira fc`, ID `28826806`: URL diferente entre os caches.
+  - `Guiguiba 06`, ID `25248276`: URL diferente entre os caches.
+- Isso confirma a hipótese do administrador de que a divergência está nos escudos. Entretanto, a inspeção dos snapshots, sem consultar a API, não permite afirmar qual imagem é visualmente mais atual/correta. O versionado não é automaticamente mais novo em todos os escudos: as URLs distintas carregam identificadores/datas internas diferentes, mas isso não basta para provar qual representa a imagem vigente.
+- Foi observado também que `Time 1` e `Time 3` aparecem com o mesmo ID Cartola `51007036` e a mesma URL de escudo nos dois caches. É uma possível duplicidade já presente nas duas fontes, não uma divergência entre elas; precisa ser conferida antes de usar nome como chave de identidade.
+
+A classificação foi normalizada comparando grupo e posição, apesar dos formatos diferentes (`groups[].name/rows` no legado e `grupos[GRUPO]` no versionado). **As sete tabelas de grupo, com quatro posições cada, são idênticas linha a linha**: nomes, posição, pontos, partidas e demais valores disponíveis coincidem. Portanto, a divergência de classificação observada na comparação estrutural anterior era de representação/estrutura, não de conteúdo.
+
+### Próxima sincronização da Sul-Americana: destino confirmado no código
+
+A análise do fluxo de sincronização esclareceu o que acontecerá quando o processo legado executar a sincronização inteligente da rodada 37:
+
+- Em `supabase/functions/sync-sheets/index.ts`, a constante `LIBERTA_SULA_RODADAS` inclui explicitamente a rodada `37`.
+- Quando o endpoint legado é chamado com `scope=smart&rodada=37`, ele executa `syncLibertadoresOrSulamericana(..., "sulamericana", ...)`.
+- Essa função grava com `upsertCache` na chave **`sulamericana`**, tipo `copa`. Ela não grava na chave `sulamericana:2026`.
+- A sincronização inteligente refaz o payload legado completo de grupos, classificação, fases e dados externos; portanto, se esse for o caminho efetivamente acionado na rodada 37, o cache legado será atualizado com os dados disponíveis na planilha naquele momento.
+- O cache versionado `sulamericana:2026` **não será atualizado por esse fluxo**.
+
+Há um segundo fluxo, mais novo, em `tournament-cron-dispatcher` + `sync-tournament-api`, mas ele percorre apenas os torneios registrados em `registry.ts`. A Sul-Americana não está nesse registry, logo esse dispatcher também não a sincroniza nem atualiza o cache versionado.
+
+A consulta de leitura a `cron.job` não encontrou jobs cujo comando/nome identificasse diretamente `sync-sheets`/sincronização. Assim, o código comprova o destino caso o smart sync da rodada 37 seja chamado, mas não comprova por si só qual agendador externo/cron fará a chamada nem que ela já esteja programada/ativa. Não foi executada nenhuma sincronização para testar.
+
+### Decisão técnica provisória
+
+1. Para os dados externos, os dois snapshots concordam em nome e ID; somente dois escudos diferem. O versionado pode ser candidato para esses escudos, mas não há prova visual de que sejam mais novos/corretos sem nova captura autorizada da API ou comparação com uma fonte atual confiável.
+2. A classificação pode ser tratada como equivalente entre os dois caches; manter o snapshot bruto de cada origem por auditoria.
+3. A próxima sincronização inteligente da rodada 37, se executada pelo fluxo legado identificado, atualizará somente `sulamericana`. Ela não atualizará `sulamericana:2026`.
+4. Após a rodada 37, será importante comparar novamente o cache legado atualizado com o versionado antes de escolher o snapshot histórico final. Preservar ambos.
+5. Não houve alteração de banco, cache, sincronização, código funcional ou deploy nesta investigação.
