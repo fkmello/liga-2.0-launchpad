@@ -347,14 +347,26 @@ export function useConfrontosLibertadores(fase: string) {
   });
 }
 
+async function fetchSulamericanaShadow() {
+  const payload = await fetchFromCache<any>(`sulamericana:${DEFAULT_SEASON}`);
+  if (!payload || payload.version !== 1 || payload.metadata?.league !== 'sulamericana' ||
+      payload.metadata?.season !== DEFAULT_SEASON) return null;
+  return payload;
+}
+
 export function useConfrontosSulamericanaGrupos(rodada: number) {
   return useQuery<LibertadoresGroupMatchesData>({
     queryKey: ['confrontos-sulamericana-grupos', rodada],
-    queryFn: () => fetchWithFallback<LibertadoresGroupMatchesData>(
-      'sulamericana',
-      { action: 'confrontos_sulamericana_grupos', rodada: rodada.toString() },
-      (d) => d?.grupos?.[`rodada_${rodada}`]
-    ),
+    queryFn: async () => {
+      const shadow = await fetchSulamericanaShadow();
+      const groupRound = shadow?.fases?.['Fase de Grupos']?.[`rodada_${rodada}`];
+      if (Array.isArray(groupRound?.groups)) return groupRound as LibertadoresGroupMatchesData;
+      return fetchWithFallback<LibertadoresGroupMatchesData>(
+        'sulamericana',
+        { action: 'confrontos_sulamericana_grupos', rodada: rodada.toString() },
+        (d) => d?.grupos?.[`rodada_${rodada}`]
+      );
+    },
     staleTime: 5 * 60 * 1000,
     enabled: rodada >= 1 && rodada <= 6,
   });
@@ -363,11 +375,17 @@ export function useConfrontosSulamericanaGrupos(rodada: number) {
 export function useDadosExternosSulamericana() {
   return useQuery<DadosExternosData>({
     queryKey: ['dados-externos-sulamericana'],
-    queryFn: () => fetchWithFallback<DadosExternosData>(
-      'sulamericana',
-      { action: 'dados_externos_sulamericana' },
-      (d) => d?.dados_externos
-    ),
+    queryFn: async () => {
+      const shadow = await fetchSulamericanaShadow();
+      if (Array.isArray(shadow?.dados_externos?.rows)) {
+        return { headers: ['Time', 'ID Cartola', 'Escudo'], rows: shadow.dados_externos.rows, raw: shadow.dados_externos.rows };
+      }
+      return fetchWithFallback<DadosExternosData>(
+        'sulamericana',
+        { action: 'dados_externos_sulamericana' },
+        (d) => d?.dados_externos
+      );
+    },
     staleTime: 30 * 60 * 1000,
   });
 }
@@ -375,11 +393,24 @@ export function useDadosExternosSulamericana() {
 export function useClassificacaoSulamericana() {
   return useQuery<LibertadoresGroupData>({
     queryKey: ['classificacao-sulamericana'],
-    queryFn: () => fetchWithFallback<LibertadoresGroupData>(
-      'sulamericana',
-      { action: 'classificacao_sulamericana' },
-      (d) => d?.classificacao
-    ),
+    queryFn: async () => {
+      const shadow = await fetchSulamericanaShadow();
+      const standings = shadow?.classificacao?.grupos;
+      if (standings && typeof standings === 'object' && Object.keys(standings).length > 0) {
+        return {
+          groups: Object.entries(standings).map(([name, rows]) => ({
+            name,
+            headers: ['', name, '', 'P', 'J', 'V', 'E', 'D', 'SG'],
+            rows: Array.isArray(rows) ? rows : [],
+          })),
+        };
+      }
+      return fetchWithFallback<LibertadoresGroupData>(
+        'sulamericana',
+        { action: 'classificacao_sulamericana' },
+        (d) => d?.classificacao
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -387,11 +418,16 @@ export function useClassificacaoSulamericana() {
 export function useConfrontosSulamericana(fase: string) {
   return useQuery<ConfrontosCopaData>({
     queryKey: ['confrontos-sulamericana', fase],
-    queryFn: () => fetchWithFallback<ConfrontosCopaData>(
-      'sulamericana',
-      { action: 'confrontos_sulamericana', fase },
-      (d) => d?.fases?.[fase]
-    ),
+    queryFn: async () => {
+      const shadow = await fetchSulamericanaShadow();
+      const phase = shadow?.fases?.[fase];
+      if (phase && Array.isArray(phase.matches)) return phase as ConfrontosCopaData;
+      return fetchWithFallback<ConfrontosCopaData>(
+        'sulamericana',
+        { action: 'confrontos_sulamericana', fase },
+        (d) => d?.fases?.[fase]
+      );
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
