@@ -149,3 +149,39 @@ O cache `sulamericana` é a fonte ativa da tela e continua sendo atualizado pelo
 **Não consolidar nem apagar nenhum dos dois registros neste momento.** Antes de qualquer mudança, é necessário verificar o histórico de criação/atualização do registro versionado (se houver logs/auditoria disponíveis) e confirmar se existe algum consumidor externo ao código rastreado. Para o projeto de histórico, a captura de 2026 deve ler e comparar ambos os snapshots, registrar a origem de cada um e escolher explicitamente o payload completo/validado — sem assumir que a chave versionada é a canônica apenas pelo nome.
 
 A inspeção foi somente leitura. Nenhum cache, código funcional, migration, configuração, sincronização ou deploy foi alterado.
+
+
+### Comparação direta dos dois registros no Supabase — 31/10/2026
+
+Consulta somente leitura aos dois registros de `public.sheets_cache`:
+
+| Propriedade | `sulamericana` (legado) | `sulamericana:2026` (versionado) |
+|---|---|---|
+| `type` | `copa` | `sulamericana` |
+| Último `synced_at` | 27/10/2026 11:18:40 UTC | 29/10/2026 19:29:41 UTC |
+| Versão/metadata | ausentes | `version=1`, metadata com temporada 2026, provider `cartola_brasileirao`, `source_type=api`, schema_version 1 e hash |
+| Rodadas de grupos | `grupos.rodada_1..6` | `fases["Fase de Grupos"].rodada_1..6` |
+| Classificação | `classificacao.groups` | `classificacao.grupos` |
+| Dados externos | 32 linhas | 32 linhas |
+| Mata-mata | Oitavas (8), Quartas (4), Semifinal (2), Final (2) | mesmas fases e quantidades |
+
+Comparações estruturais/JSON:
+- As seis rodadas de confrontos da fase de grupos são idênticas entre os dois registros.
+- Os dados das quatro fases de mata-mata são idênticos.
+- Os dados externos **não são idênticos**, apesar de ambos terem 32 linhas. Não se deve substituir um pelo outro sem identificar as diferenças e validar os IDs/escudos.
+- A classificação também não é idêntica em representação: o legado usa a chave `groups`, enquanto o versionado usa `grupos`. A comparação direta desses campos retornou diferença; é necessário normalizar os dois formatos e comparar nomes, equipes, posições e estatísticas antes de escolher o snapshot.
+- O registro versionado contém a classificação em sete grupos, com quatro linhas cada. O registro legado também possui classificação, mas em estrutura distinta.
+
+### O que se sabe sobre a origem do cache versionado
+
+O registro versionado tem metadados de geração próprios (hash SHA-256, `generated_at`, provider e source_type), foi sincronizado quase 32 horas depois do legado e foi gravado pelo mesmo UUID de administrador indicado em `synced_by`. Isso comprova que ele passou por um fluxo de geração versionado, mas **não identifica por si só qual função/commit originou a gravação**. A inspeção da branch atual não encontrou produtor da Sul-Americana no registry novo. A origem exata permanece não comprovada; não atribuir a criação a um fluxo específico sem logs ou histórico de auditoria.
+
+### Decisão de segurança para o arquivo histórico
+
+Não escolher ainda um cache como substituto integral do outro. Para o snapshot histórico de 2026, o processo deverá:
+1. preservar os dois payloads brutos com sua chave, tipo, timestamps e metadados de origem;
+2. comparar/normalizar classificação e dados externos, resolvendo divergências de equipes, IDs e escudos;
+3. usar os confrontos de grupos e mata-mata, já confirmados idênticos nesta leitura, sem descartar o payload bruto de nenhuma fonte;
+4. registrar explicitamente a fonte escolhida para cada conjunto de dados e eventuais correções manuais.
+
+A comparação foi somente leitura. Nenhum cache, tabela, código funcional, migration, sincronização ou deploy foi alterado.
