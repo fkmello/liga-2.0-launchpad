@@ -348,7 +348,7 @@ export function useConfrontosLibertadores(fase: string) {
 }
 
 async function fetchSulamericanaShadow() {
-  const payload = await fetchFromCache<any>(`sulamericana:${DEFAULT_SEASON}`);
+  const payload = await fetchFromCache<any>(`shadow/sulamericana/${DEFAULT_SEASON}`);
   if (!payload || payload.version !== 1 || payload.metadata?.league !== 'sulamericana' ||
       payload.metadata?.season !== DEFAULT_SEASON) return null;
   return payload;
