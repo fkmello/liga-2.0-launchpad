@@ -22,21 +22,31 @@ const Tournaments = () => {
   const navigate = useNavigate();
   const { league } = useAppLeague();
   const [settingsMap, setSettingsMap] = useState<Record<string, boolean>>({});
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase.from('tournament_settings').select('slug, enabled');
-      if (data) {
-        const map: Record<string, boolean> = {};
-        data.forEach((row: any) => { map[row.slug] = row.enabled; });
-        setSettingsMap(map);
+      try {
+        const { data, error } = await supabase.from('tournament_settings').select('slug, enabled');
+        if (error) throw error;
+
+        if (data) {
+          const map: Record<string, boolean> = {};
+          data.forEach((row: any) => { map[row.slug] = row.enabled; });
+          setSettingsMap(map);
+        }
+      } catch (error) {
+        console.error('Falha ao carregar configurações dos torneios:', error);
+      } finally {
+        setSettingsLoaded(true);
       }
     };
     fetch();
   }, []);
 
-  // Guard: aguarda contexto hidratar
-  if (!league) {
+  // Aguarda a liga e as configurações para não exibir torneios desativados
+  // enquanto os dados ainda estão sendo carregados.
+  if (!league || !settingsLoaded) {
     return (
       <div className="flex items-center justify-center min-h-[50vh] text-muted-foreground">
         Carregando...
@@ -45,7 +55,9 @@ const Tournaments = () => {
   }
 
   const allowedSlugs = LEAGUE_SLUGS[league];
-  const visibleTournaments = tournaments.filter(t => allowedSlugs.includes(t.slug));
+  const visibleTournaments = tournaments.filter(
+    (t) => allowedSlugs.includes(t.slug) && settingsMap[t.slug] !== false,
+  );
 
   return (
     <AppLayout>
@@ -56,29 +68,19 @@ const Tournaments = () => {
         </div>
 
         <div className="space-y-3">
-          {visibleTournaments.map((t) => {
-            const isEnabled = settingsMap[t.slug] !== false;
-            return (
-              <button
-                key={t.slug}
-                disabled={!isEnabled}
-                onClick={isEnabled ? () => navigate(`/tournaments/${t.slug}`) : undefined}
-                className={`w-full flex items-center justify-between p-4 rounded-lg bg-card border border-border transition-colors text-left ${
-                  isEnabled ? 'hover:border-primary/50' : 'opacity-50 cursor-not-allowed'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Trophy className="w-5 h-5 text-primary flex-shrink-0" />
-                  <span className="text-sm font-semibold text-foreground">{t.name}</span>
-                </div>
-                {isEnabled ? (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <span className="text-xs text-muted-foreground">Em Breve</span>
-                )}
-              </button>
-            );
-          })}
+          {visibleTournaments.map((t) => (
+            <button
+              key={t.slug}
+              onClick={() => navigate(`/tournaments/${t.slug}`)}
+              className="w-full flex items-center justify-between p-4 rounded-lg bg-card border border-border transition-colors text-left hover:border-primary/50"
+            >
+              <div className="flex items-center gap-3">
+                <Trophy className="w-5 h-5 text-primary flex-shrink-0" />
+                <span className="text-sm font-semibold text-foreground">{t.name}</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+          ))}
 
           {visibleTournaments.length === 0 && (
             <div className="text-center text-sm text-muted-foreground py-12">
