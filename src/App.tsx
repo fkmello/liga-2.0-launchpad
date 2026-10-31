@@ -21,6 +21,7 @@ import AdminInviteCodes from "./pages/AdminInviteCodes";
 import AdminUsers from "./pages/AdminUsers";
 import AdminTournaments from "./pages/AdminTournaments";
 import AdminLeague from "./pages/AdminLeague";
+import AdminSeasonHistory from "./pages/AdminSeasonHistory";
 import Profile from "./pages/Profile";
 import LeagueSelect from "./pages/LeagueSelect";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -145,6 +146,16 @@ const App = () => (
                   <ProtectedRoute>
                     <AdminRoute>
                       <AdminTournaments />
+                    </AdminRoute>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/season-history"
+                element={
+                  <ProtectedRoute>
+                    <AdminRoute>
+                      <AdminSeasonHistory />
                     </AdminRoute>
                   </ProtectedRoute>
                 }
