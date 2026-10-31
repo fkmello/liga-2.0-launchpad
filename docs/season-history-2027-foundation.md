@@ -64,3 +64,46 @@ O arquivamento não deve ser executado automaticamente apenas porque a rodada 38
 
 ## Estado inicial
 Este documento é a fundação de planejamento. Nenhuma tabela foi criada, nenhum dado foi arquivado e nenhuma sincronização ou deploy foi alterado por esta etapa.
+
+## Auditoria inicial dos dados existentes — 31/10/2026
+
+Esta auditoria foi feita por leitura do código e dos registros atuais de `public.sheets_cache` e `public.tournament_settings`. Ela não executou chamadas à API do Cartola, não alterou o banco e não arquivou dados.
+
+### Torneios configurados atualmente
+
+Os slugs presentes em `src/config/leagueSlugs.ts` e/ou `tournament_settings` mostram que a configuração precisa ser dinâmica. Em 31/10/2026, os registros de configuração são:
+
+- `brasileirao-serie-a`, `brasileirao-serie-b`, `brasileirao-serie-c`: habilitados.
+- `copa-do-brasil`, `libertadores`, `sulamericana`: habilitados.
+- `champions-league`, `copa-do-mundo`: habilitados e marcados como finalizados.
+- `copa-intercontinental`: desabilitado.
+
+A lista acima é apenas um retrato da configuração atual, não uma lista fixa para o modelo histórico. Cada temporada deve registrar somente os torneios que efetivamente existiram/foram disputados nela.
+
+### Fontes e formatos já identificados
+
+- Ranking da liga: `ranking_liga:ANUAL`, `ranking_liga:1º TURNO` e `ranking_liga:2º TURNO` possuem 60 entradas cada no momento da auditoria. Há também caches mensais. Esses dados são atualizáveis e ainda não representam necessariamente a classificação final da temporada.
+- Séries A/B/C: existem snapshots `shadow/brasileirao_serie_a/2026`, `shadow/brasileirao_serie_b/2026` e `shadow/brasileirao_serie_c/2026`, cada um com fases por rodada (1 a 38), classificação e dados externos.
+- Copa do Brasil: `shadow/copa_brasil/2026`, com fases, classificação e dados externos. O cache estava sincronizado em 20/10/2026; precisa ser atualizado/validado antes de servir como fonte final.
+- Libertadores: `shadow/libertadores/2026`, com fase de grupos, mata-mata, classificação e dados externos.
+- Sul-Americana: `sulamericana:2026`, com fase de grupos, mata-mata, classificação e dados externos. Também existe cache legado `sulamericana`; a seleção da fonte canônica precisa ser definida para o arquivamento.
+- Champions League: cache `campeoes`, com fases, classificação e dados externos.
+- Copa do Mundo: cache `copa_mundo`, com fases, classificação e dados externos.
+- Intercontinental: cache legado `intercontinental`, com fases; o torneio está desabilitado na configuração atual. É necessário verificar se houve disputa efetiva em 2026 antes de marcar como não disputado ou arquivável.
+
+### Pontos que exigem captura/validação antes do fim da janela da API
+
+1. Guardar snapshots imutáveis do ranking anual e dos dois turnos quando cada período fechar; o cache atual de 60 posições pode ser sobrescrito.
+2. Confirmar se os caches de Séries A/B/C incluem classificação final completa e pontos totais, e não apenas resultados por rodada.
+3. Verificar para cada torneio se todas as fases, placares, vencedores manuais e pódio estão presentes no snapshot mais recente.
+4. Resolver qual cache é a fonte oficial quando existem variantes legadas e versionadas (especialmente Sul-Americana, Libertadores e Copa do Brasil).
+5. Preservar identificadores Cartola, nomes e escudos em snapshots; não depender de consultas futuras para reconstruí-los.
+6. Definir o vínculo histórico com os participantes: `profiles` representa usuários atuais e pode mudar, enquanto `user_teams` mantém `id_cartola`, nome, série e liga. O arquivo precisa conservar também uma identidade textual estável no próprio snapshot, sem depender exclusivamente de uma FK para perfil.
+7. Capturar os resultados da temporada e validar cobertura/consistência usando dados existentes, antes de desenhar a rotina de arquivamento.
+
+### Observações de implementação
+
+- `sheets_cache` usa a coluna `cache_key` e o JSONB `data`; é cache operacional, não arquivo permanente.
+- `tournament_settings` registra habilitação e finalização, mas não deve ser a fonte histórica exclusiva: configurações podem mudar entre temporadas.
+- `src/hooks/useGoogleSheets.ts` confirma contratos diferentes para ranking, classificação, confrontos, fases de grupos e mata-mata. A camada histórica deve preservar o snapshot bruto original e extrair campos normalizados quando possível.
+- Nenhuma migration, tabela, policy RLS, chamada à API ou alteração de produção foi realizada nesta auditoria.
