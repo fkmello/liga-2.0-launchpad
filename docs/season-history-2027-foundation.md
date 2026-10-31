@@ -124,3 +124,28 @@ A lista acima é apenas um retrato da configuração atual, não uma lista fixa 
 
 ### Política de catálogo histórico
 O catálogo não deve ser uma lista fixa de torneios codificada para sempre. Cada arquivo de temporada registra os torneios efetivamente disputados naquela temporada, com identificador estável, nome apresentado, origem da API, formato e status. Um torneio novo começa seu histórico na primeira temporada em que for disputado; um torneio encerrado mantém os arquivos anteriores.
+
+
+## Investigação da Sul-Americana: cache legado x cache versionado — 31/10/2026
+
+Inspeção estática do código na branch `main` (sem chamadas à API, sem alterações no banco e sem deploy) esclareceu o fluxo atualmente implementado:
+
+### Quem lê o cache legado `sulamericana`
+- `src/hooks/useGoogleSheets.ts`: os quatro hooks usados pela tela — `useConfrontosSulamericanaGrupos`, `useDadosExternosSulamericana`, `useClassificacaoSulamericana` e `useConfrontosSulamericana` — chamam `fetchWithFallback('sulamericana', ...)`.
+- `src/components/tournaments/SulamericanaView.tsx`: usa diretamente esses quatro hooks. Portanto, a interface atual da Sul-Americana está ligada ao cache legado.
+- `src/lib/sheetsCache.ts`: `fetchWithFallback` consulta primeiro a chave indicada em `sheets_cache`; só chama a Edge Function antiga `google-sheets` se não encontrar cache.
+- `supabase/functions/sync-sheets/index.ts`: `syncLibertadoresOrSulamericana(..., 'sulamericana', ...)` grava a chave `sulamericana`, tipo `copa`. Os escopos `smart`, `tournament`, `all` e `sulamericana_dados_externos` desse fluxo também apontam para esse escritor legado.
+
+### O que o fluxo versionado/consolidado faz — e o que não faz
+- `supabase/functions/sync-tournament-api/index.ts` resolve torneios exclusivamente pelo registry `supabase/functions/_shared/tournament/registry.ts`.
+- O registry atual contém Copa do Brasil, Brasileirão A/B/C, Libertadores e Copa do Mundo; **não contém `sulamericana`**.
+- O dispatcher de cron percorre `listTournaments()`; consequentemente, a Sul-Americana não é sincronizada por esse dispatcher/registry.
+- O código consolidado da interface (`useTournamentPayload`) só está habilitado para Série A/B/C pelas feature flags; não existe caminho consolidado habilitado para a tela da Sul-Americana.
+- A configuração de chaves `src/config/tournamentCacheKeys.ts` não registra uma migração especial da Sul-Americana. A existência do registro `sulamericana:2026` no banco, por si só, não o torna fonte ativa do app.
+
+### Conclusão operacional
+O cache `sulamericana` é a fonte ativa da tela e continua sendo atualizado pelo fluxo antigo de sincronização. O cache `sulamericana:2026` é um registro versionado paralelo, mas não foi encontrado consumidor no frontend nem produtor no registry/cron atual. Assim, a hipótese mais provável é que ele tenha sido criado por uma etapa experimental/manual ou por um fluxo anterior não presente na branch inspecionada; a origem exata da gravação ainda não está comprovada.
+
+**Não consolidar nem apagar nenhum dos dois registros neste momento.** Antes de qualquer mudança, é necessário verificar o histórico de criação/atualização do registro versionado (se houver logs/auditoria disponíveis) e confirmar se existe algum consumidor externo ao código rastreado. Para o projeto de histórico, a captura de 2026 deve ler e comparar ambos os snapshots, registrar a origem de cada um e escolher explicitamente o payload completo/validado — sem assumir que a chave versionada é a canônica apenas pelo nome.
+
+A inspeção foi somente leitura. Nenhum cache, código funcional, migration, configuração, sincronização ou deploy foi alterado.
