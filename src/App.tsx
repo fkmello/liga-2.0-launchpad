@@ -151,6 +151,16 @@ const App = () => (
                 }
               />
               <Route
+                path="/admin/season-history"
+                element={
+                  <ProtectedRoute>
+                    <AdminRoute>
+                      <AdminSeasonHistory />
+                    </AdminRoute>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/admin/league"
                 element={
                   <ProtectedRoute>
