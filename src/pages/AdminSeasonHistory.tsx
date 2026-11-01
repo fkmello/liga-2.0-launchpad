@@ -109,6 +109,14 @@ const AdminSeasonHistory = () => {
     ].join('\\n');
     if (!window.confirm(message)) return;
 
+    const typedConfirmation = window.prompt(
+      `Para impedir um arquivamento acidental, digite exatamente: ARQUIVAR ${preview.season}`,
+    );
+    if (typedConfirmation !== `ARQUIVAR ${preview.season}`) {
+      toast.info('Arquivamento cancelado. Nenhum dado foi gravado.');
+      return;
+    }
+
     setArchiving(true);
     const { data, error } = await supabase.rpc('archive_season_history', {
       p_payload: {
