@@ -31,6 +31,8 @@ export type TournamentPreview = {
   sourceProvider: string | null;
   sourceFormat: string | null;
   status: 'complete' | 'pending' | 'not_found';
+  kind: 'standings' | 'knockout';
+  standingsCount: number;
   podium: PreviewPodiumEntry[];
   finalMatches: Record<string, any>[];
   sourceSnapshot: Record<string, any> | null;
@@ -168,7 +170,7 @@ function tournamentPreview(
   if (!selected) {
     return {
       slug: config.slug, name: config.name, sourceCacheKey: null, sourceSyncedAt: null,
-      sourceProvider: null, sourceFormat: null, status: 'not_found', podium: [], finalMatches: [],
+      sourceProvider: null, sourceFormat: null, status: 'not_found', kind: config.kind, standingsCount: 0, podium: [], finalMatches: [],
       sourceSnapshot: null, alternateSources: [], alternateSnapshots: [], warnings: ['Nenhum cache disponível para esta competição.'],
     };
   }
@@ -176,8 +178,10 @@ function tournamentPreview(
   const warnings: string[] = [];
   const finalMatches = findFinalMatches(selected.data);
   const result = buildPodium(selected.data, finalMatches);
+  const standingsRows = selected.data?.standings?.grupos?.geral ?? selected.data?.classificacao?.rows ?? [];
+  const standingsCount = Array.isArray(standingsRows) ? standingsRows.length : 0;
   if (config.kind === 'standings') {
-    warnings.push('Fonte de classificação da série identificada. O campeão desta série não será inferido como campeão de torneio.');
+    warnings.push('Esta é uma fonte auxiliar de classificação da série; seu líder não será inferido automaticamente como campeão de torneio.');
   } else {
     if (result.unresolved) warnings.push(result.unresolved);
     if (result.thirdMissing) warnings.push('Terceiro colocado ainda não identificado por resultado decisivo da disputa de terceiro lugar.');
