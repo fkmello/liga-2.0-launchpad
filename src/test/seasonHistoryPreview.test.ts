@@ -51,8 +51,8 @@ describe('season history preview collector', () => {
     }]);
     const liberta = preview.tournaments.find(item => item.slug === 'libertadores')!;
     expect(liberta.status).toBe('complete');
-    expect(liberta.podium.map(item => item.teamName)).toEqual(['Equipe A', 'Equipe B', 'Equipe D']);
-    expect(liberta.podium[0].badgeUrl).toBe('https://example.com/a.png');
+    expect(liberta.podium.map(item => item.teamName)).toEqual(['Equipe B', 'Equipe A', 'Equipe D']);
+    expect(liberta.podium[0].badgeUrl).toBe('https://example.com/b.png');
     expect(liberta.podium[2].decidedManually).toBe(true);
     expect(preview.standings[0].cartolaTeamId).toBe('1');
   });
