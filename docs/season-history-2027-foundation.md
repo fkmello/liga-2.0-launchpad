@@ -288,3 +288,7 @@ Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas 
 - A revisão permite marcar explicitamente cada torneio eliminatório sem pódio como `not_played`; essa decisão aparece no resumo de confirmação. Sem resolver ou marcar todas as edições como não disputadas, o botão de arquivamento permanece bloqueado.
 - A lista arquivada inclui também torneios sem cache, preservando o fato de que foram revisados e classificados como pendentes ou não disputados, em vez de omiti-los silenciosamente.
 - A tipagem local do cliente Supabase foi atualizada para reconhecer a RPC `archive_season_history`.
+
+- A RPC exige também `summary.seasonFinalized = true`, além da autorização administrativa. A interface solicita uma confirmação explícita de encerramento da temporada e alerta que 2026 ainda está em andamento; a função no banco repete essa validação para não depender apenas do frontend.
+- A validação SQL dos arrays JSON usa aliases explícitos de coluna para evitar ambiguidades no PostgreSQL.
+- O resumo de confirmação apresenta as linhas separadamente, facilitando a revisão dos totais antes da gravação.
