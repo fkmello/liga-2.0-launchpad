@@ -267,3 +267,17 @@ Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas 
 - Nenhuma chamada à API do Cartola executada.
 - Nenhum deploy de produção realizado.
 - A prévia é exclusivamente de leitura e não habilita arquivamento.
+
+
+## Fluxo transacional de arquivamento — 01/11/2026
+
+- A tela administrativa agora oferece confirmação explícita após a prévia.
+- A função PostgreSQL `archive_season_history(jsonb)` grava catálogo, classificação, competições e evento de auditoria dentro de uma única transação.
+- A função valida administrador, temporada, payload, pontuações obrigatórias e posições duplicadas.
+- A restrição única em liga + temporada impede um segundo arquivamento acidental; a tentativa duplicada retorna erro sem sobrescrever o arquivo existente.
+- A classificação completa e os snapshots de fonte principal/alternativas são preservados. Competições sem fonte não são inventadas nem inseridas.
+- Fontes auxiliares das Séries A/B/C são armazenadas como registros pendentes, sem inferir campeão. Torneios knockout só recebem status completo quando o pódio foi resolvido.
+- `profile_id` e `manager_name` permanecem nulos: não se associa participante a perfil atual sem evidência histórica inequívoca.
+- A função é `SECURITY DEFINER`, verifica `public.is_admin(auth.uid())`, restringe execução a `authenticated` e não expõe service-role no cliente.
+- A migration ainda não foi aplicada ao Supabase de produção. O fluxo permanece no PR/Preview; nenhum arquivamento real foi executado.
+- A interface exige classificação com pontuação em todas as linhas e mostra um resumo antes da confirmação. Pendências são preservadas como pendências para revisão posterior.
