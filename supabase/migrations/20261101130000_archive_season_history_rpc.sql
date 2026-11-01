@@ -56,7 +56,7 @@ BEGIN
     WHERE jsonb_typeof(value) IS DISTINCT FROM 'object'
        OR NULLIF(trim(value->>'team_name'), '') IS NULL
        OR COALESCE(value->>'position', '') !~ '^[1-9][0-9]*$'
-       OR COALESCE(value->>'total_points', '') !~ '^-?[0-9]+(\\.[0-9]+)?$'
+       OR COALESCE(value->>'total_points', '') !~ '^-?[0-9]+([.][0-9]+)?$'
   ) THEN
     RAISE EXCEPTION 'Há equipe com nome, posição ou pontuação inválida. Corrija a classificação antes de arquivar.';
   END IF;
