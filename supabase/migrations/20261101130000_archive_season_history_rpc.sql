@@ -19,8 +19,12 @@ BEGIN
     RAISE EXCEPTION 'Apenas administradores podem arquivar temporadas.' USING ERRCODE = '42501';
   END IF;
 
-  IF jsonb_typeof(p_payload) <> 'object' THEN
+  IF jsonb_typeof(p_payload) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'Payload de arquivamento inválido.';
+  END IF;
+
+  IF COALESCE((p_payload->'summary'->>'seasonFinalized')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'A temporada ainda não foi confirmada como encerrada pelo administrador.';
   END IF;
 
   v_season := (p_payload->>'season')::integer;
@@ -39,24 +43,24 @@ BEGIN
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM jsonb_array_elements(v_standings) s
-    WHERE NULLIF(trim(s->>'team_name'), '') IS NULL
-       OR NULLIF(s->>'position', '') IS NULL
-       OR NULLIF(s->>'total_points', '') IS NULL
+    SELECT 1 FROM jsonb_array_elements(v_standings) AS item(value)
+    WHERE NULLIF(trim(value->>'team_name'), '') IS NULL
+       OR NULLIF(value->>'position', '') IS NULL
+       OR NULLIF(value->>'total_points', '') IS NULL
   ) THEN
     RAISE EXCEPTION 'Há equipe sem nome, posição ou pontuação. Corrija a classificação antes de arquivar.';
   END IF;
 
   IF (SELECT count(*) FROM jsonb_array_elements(v_standings))
-     <> (SELECT count(DISTINCT (s->>'position')::integer) FROM jsonb_array_elements(v_standings) s) THEN
+     <> (SELECT count(DISTINCT (s->>'position')::integer) FROM jsonb_array_elements(v_standings) AS item(value)) THEN
     RAISE EXCEPTION 'Existem posições duplicadas na classificação.';
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM jsonb_array_elements(v_competitions) c
-    WHERE NULLIF(trim(c->>'slug'), '') IS NULL
-       OR NULLIF(trim(c->>'name'), '') IS NULL
-       OR COALESCE(c->>'status', '') NOT IN ('complete', 'pending', 'not_played')
+    SELECT 1 FROM jsonb_array_elements(v_competitions) AS item(value)
+    WHERE NULLIF(trim(value->>'slug'), '') IS NULL
+       OR NULLIF(trim(value->>'name'), '') IS NULL
+       OR COALESCE(value->>'status', '') NOT IN ('complete', 'pending', 'not_played')
   ) THEN
     RAISE EXCEPTION 'Há torneio com identificação ou status inválido.';
   END IF;
