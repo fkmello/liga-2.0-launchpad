@@ -31,6 +31,8 @@ export type TournamentPreview = {
   sourceProvider: string | null;
   sourceFormat: string | null;
   status: 'complete' | 'pending' | 'not_found';
+  enabled: boolean | null;
+  finished: boolean | null;
   kind: 'standings' | 'knockout';
   standingsCount: number;
   podium: PreviewPodiumEntry[];
@@ -40,6 +42,8 @@ export type TournamentPreview = {
   alternateSnapshots: Array<{ cacheKey: string; syncedAt: string | null; data: Record<string, any> }>;
   warnings: string[];
 };
+
+export type TournamentSettingSnapshot = { slug: string; enabled: boolean; finished: boolean };
 
 export type SeasonHistoryPreview = {
   season: number;
@@ -162,6 +166,7 @@ function buildPodium(data: Record<string, any>, finalMatches: Record<string, any
 function tournamentPreview(
   config: typeof TOURNAMENT_SOURCES[number],
   snapshots: Map<string, CacheSnapshot>,
+  setting?: TournamentSettingSnapshot,
 ): TournamentPreview {
   const candidates = config.keys.map(key => snapshots.get(key)).filter(Boolean) as CacheSnapshot[];
   const selected = candidates[0] ?? null;
@@ -170,7 +175,7 @@ function tournamentPreview(
   if (!selected) {
     return {
       slug: config.slug, name: config.name, sourceCacheKey: null, sourceSyncedAt: null,
-      sourceProvider: null, sourceFormat: null, status: 'not_found', kind: config.kind, standingsCount: 0, podium: [], finalMatches: [],
+      sourceProvider: null, sourceFormat: null, status: 'not_found', enabled: setting?.enabled ?? null, finished: setting?.finished ?? null, kind: config.kind, standingsCount: 0, podium: [], finalMatches: [],
       sourceSnapshot: null, alternateSources: [], alternateSnapshots: [], warnings: ['Nenhum cache disponível para esta competição.'],
     };
   }
@@ -187,7 +192,9 @@ function tournamentPreview(
     if (result.thirdMissing) warnings.push('Terceiro colocado ainda não identificado por resultado decisivo da disputa de terceiro lugar.');
   }
   if (alternates.length) warnings.push('Há mais de uma fonte de cache para esta competição; as fontes alternativas foram preservadas para conferência.');
-  if (selected.synced_at && Date.now() - new Date(selected.synced_at).getTime() > 7 * 24 * 60 * 60 * 1000) {
+  if (setting && !setting.enabled && !setting.finished) warnings.push('O torneio está desabilitado e não marcado como finalizado na configuração atual; confirmar se a edição 2026 foi efetivamente disputada antes de arquivar ou marcar como não disputada.');
+  if (setting?.finished && config.kind === 'knockout' && result.podium.length < 2) warnings.push('A configuração marca o torneio como finalizado, mas os dados disponíveis não permitem identificar o pódio completo.');
+  if (!setting?.finished && selected.synced_at && Date.now() - new Date(selected.synced_at).getTime() > 7 * 24 * 60 * 60 * 1000) {
     warnings.push('Cache com mais de 7 dias: atualizar/conferir antes do arquivamento definitivo.');
   }
   return {
@@ -198,6 +205,8 @@ function tournamentPreview(
     sourceProvider: selected.data?.metadata?.provider ?? null,
     sourceFormat: selected.data?.metadata?.source_type ?? selected.type ?? null,
     status: config.kind === 'standings' ? (standingsCount > 0 ? 'complete' : 'pending') : (result.podium.length >= 2 && (!result.hasThirdMatch || !result.thirdMissing) ? 'complete' : 'pending'),
+    enabled: setting?.enabled ?? null,
+    finished: setting?.finished ?? null,
     kind: config.kind,
     standingsCount,
     podium: result.podium,
@@ -212,6 +221,7 @@ function tournamentPreview(
 export function buildSeasonHistoryPreview(
   season: number,
   snapshots: CacheSnapshot[],
+  tournamentSettings: TournamentSettingSnapshot[] = [],
 ): SeasonHistoryPreview {
   const byKey = new Map(snapshots.map(row => [row.cache_key, row]));
   const ranking = byKey.get('ranking_liga:ANUAL');
@@ -254,7 +264,7 @@ export function buildSeasonHistoryPreview(
     rankingSource: ranking ? { cacheKey: ranking.cache_key, syncedAt: ranking.synced_at } : null,
     rankingSnapshot: ranking?.data ?? null,
     standings,
-    tournaments: TOURNAMENT_SOURCES.map(config => tournamentPreview(config, byKey)),
+    tournaments: TOURNAMENT_SOURCES.map(config => tournamentPreview(config, byKey, tournamentSettings.find(setting => setting.slug === config.slug))),
     warnings,
   };
 }
