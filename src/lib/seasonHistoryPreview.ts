@@ -56,15 +56,15 @@ export type SeasonHistoryPreview = {
 };
 
 const TOURNAMENT_SOURCES = [
-  { slug: 'brasileirao-serie-a', name: 'Brasileirão Série A', keys: ['shadow/brasileirao_serie_a/2026'], kind: 'standings', finalLegs: 1 },
-  { slug: 'brasileirao-serie-b', name: 'Brasileirão Série B', keys: ['shadow/brasileirao_serie_b/2026'], kind: 'standings', finalLegs: 1 },
-  { slug: 'brasileirao-serie-c', name: 'Brasileirão Série C', keys: ['shadow/brasileirao_serie_c/2026'], kind: 'standings', finalLegs: 1 },
-  { slug: 'copa-do-brasil', name: 'Copa do Brasil', keys: ['shadow/copa_brasil/2026', 'copa:brasil'], kind: 'knockout', finalLegs: 1 },
-  { slug: 'libertadores', name: 'Libertadores', keys: ['shadow/libertadores/2026', 'libertadores'], kind: 'knockout', finalLegs: 1 },
-  { slug: 'sulamericana', name: 'Sul-Americana', keys: ['sulamericana:2026', 'sulamericana'], kind: 'knockout', finalLegs: 1 },
-  { slug: 'champions-league', name: 'Champions League', keys: ['campeoes'], kind: 'knockout', finalLegs: 1 },
-  { slug: 'copa-do-mundo', name: 'Copa do Mundo', keys: ['copa_mundo'], kind: 'knockout', finalLegs: 1 },
-  { slug: 'copa-intercontinental', name: 'Copa Intercontinental', keys: ['intercontinental'], kind: 'knockout', finalLegs: 1 },
+  { slug: 'brasileirao-serie-a', name: 'Brasileirão Série A', keys: ['shadow/brasileirao_serie_a/2026'], kind: 'standings' },
+  { slug: 'brasileirao-serie-b', name: 'Brasileirão Série B', keys: ['shadow/brasileirao_serie_b/2026'], kind: 'standings' },
+  { slug: 'brasileirao-serie-c', name: 'Brasileirão Série C', keys: ['shadow/brasileirao_serie_c/2026'], kind: 'standings' },
+  { slug: 'copa-do-brasil', name: 'Copa do Brasil', keys: ['shadow/copa_brasil/2026', 'copa:brasil'], kind: 'knockout' },
+  { slug: 'libertadores', name: 'Libertadores', keys: ['shadow/libertadores/2026', 'libertadores'], kind: 'knockout' },
+  { slug: 'sulamericana', name: 'Sul-Americana', keys: ['sulamericana:2026', 'sulamericana'], kind: 'knockout' },
+  { slug: 'champions-league', name: 'Champions League', keys: ['campeoes'], kind: 'knockout' },
+  { slug: 'copa-do-mundo', name: 'Copa do Mundo', keys: ['copa_mundo'], kind: 'knockout' },
+  { slug: 'copa-intercontinental', name: 'Copa Intercontinental', keys: ['intercontinental'], kind: 'knockout' },
 ] as const;
 
 function normalizeName(value: unknown): string {
@@ -107,7 +107,7 @@ function getMatchType(match: Record<string, any>): 'final' | 'third' | null {
   return null;
 }
 
-function resolveMatch(match: Record<string, any>, teams: Map<string, { id: string | null; badge: string | null }>, expectedLegs: 1 | 2) {
+function resolveMatch(match: Record<string, any>, teams: Map<string, { id: string | null; badge: string | null }>) {
   const team1 = String(match.team1 ?? '').trim();
   const team2 = String(match.team2 ?? '').trim();
   if (!team1 || !team2) return null;
@@ -118,7 +118,7 @@ function resolveMatch(match: Record<string, any>, teams: Map<string, { id: strin
   const volta2 = parseCartolaNumber(match.scoreVolta2);
   const hasReturnLeg = match.scoreVolta1 !== undefined && match.scoreVolta2 !== undefined &&
     String(match.scoreVolta1).trim() !== '' && String(match.scoreVolta2).trim() !== '';
-  if (ida1 === null || ida2 === null || (expectedLegs === 2 && !hasReturnLeg) || (hasReturnLeg && (volta1 === null || volta2 === null))) return null;
+  if (ida1 === null || ida2 === null || (hasReturnLeg && (volta1 === null || volta2 === null))) return null;
 
   const scoreFor = ida1 + (hasReturnLeg ? volta1! : 0);
   const scoreAgainst = ida2 + (hasReturnLeg ? volta2! : 0);
@@ -148,12 +148,12 @@ function resolveMatch(match: Record<string, any>, teams: Map<string, { id: strin
   };
 }
 
-function buildPodium(data: Record<string, any>, finalMatches: Record<string, any>[], expectedLegs: 1 | 2) {
+function buildPodium(data: Record<string, any>, finalMatches: Record<string, any>[]) {
   const teams = externalTeamMap(data);
   const finalMatch = finalMatches.find(match => getMatchType(match) === 'final') ?? (finalMatches.length === 1 ? finalMatches[0] : null);
   const thirdMatch = finalMatches.find(match => getMatchType(match) === 'third');
-  const finalResult = finalMatch ? resolveMatch(finalMatch, teams, expectedLegs) : null;
-  const thirdResult = thirdMatch ? resolveMatch(thirdMatch, teams, expectedLegs) : null;
+  const finalResult = finalMatch ? resolveMatch(finalMatch, teams) : null;
+  const thirdResult = thirdMatch ? resolveMatch(thirdMatch, teams) : null;
   const podium: PreviewPodiumEntry[] = [];
   if (finalResult) {
     podium.push({ position: 1, ...finalResult.winner });
@@ -184,7 +184,7 @@ function tournamentPreview(
 
   const warnings: string[] = [];
   const finalMatches = findFinalMatches(selected.data);
-  const result = buildPodium(selected.data, finalMatches, config.finalLegs);
+  const result = buildPodium(selected.data, finalMatches);
   const standingsRows = selected.data?.standings?.grupos?.geral ?? selected.data?.classificacao?.rows ?? [];
   const standingsCount = Array.isArray(standingsRows) ? standingsRows.length : 0;
   if (config.kind === 'standings') {
