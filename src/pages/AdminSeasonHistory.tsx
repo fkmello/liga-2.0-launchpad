@@ -21,7 +21,10 @@ const AdminSeasonHistory = () => {
   const [preview, setPreview] = useState<SeasonHistoryPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
-  const unresolvedKnockouts = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status !== 'complete') ?? [];
+  const [notPlayedTournaments, setNotPlayedTournaments] = useState<string[]>([]);
+  const unresolvedKnockouts = preview?.tournaments.filter(
+    item => item.kind === 'knockout' && item.status !== 'complete' && !notPlayedTournaments.includes(item.slug),
+  ) ?? [];
 
   const generatePreview = useCallback(async () => {
     const parsedSeason = Number(season);
@@ -69,7 +72,6 @@ const AdminSeasonHistory = () => {
     }
 
     const competitions = preview.tournaments
-      .filter(item => item.sourceSnapshot !== null)
       .map(item => {
         const champion = item.podium.find(entry => entry.position === 1);
         const runnerUp = item.podium.find(entry => entry.position === 2);
@@ -80,7 +82,7 @@ const AdminSeasonHistory = () => {
           source_provider: item.sourceProvider,
           source_format: item.sourceFormat,
           // Classificações auxiliares e torneios sem decisão completa permanecem pendentes.
-          status: item.kind === 'knockout' && item.status === 'complete' ? 'complete' : 'pending',
+          status: notPlayedTournaments.includes(item.slug) ? 'not_played' : item.kind === 'knockout' && item.status === 'complete' ? 'complete' : 'pending',
           champion_name: champion?.teamName ?? null,
           champion_badge_url: champion?.badgeUrl ?? null,
           runner_up_name: runnerUp?.teamName ?? null,
@@ -99,6 +101,7 @@ const AdminSeasonHistory = () => {
       });
 
     const pending = competitions.filter(item => item.status === 'pending').length;
+    const notPlayed = competitions.filter(item => item.status === 'not_played').length;
     const message = [
       'CONFIRMAR ARQUIVAMENTO PERMANENTE?',
       '',
@@ -106,6 +109,7 @@ const AdminSeasonHistory = () => {
       `Classificação: ${preview.standings.length} equipes`,
       `Torneios com fonte disponível: ${competitions.length}`,
       `Torneios que ficarão pendentes para conferência: ${pending}`,
+      `Edições marcadas como não disputadas: ${notPlayed}`,
       '',
       'A operação não poderá ser repetida para esta liga/temporada.',
       'Os vínculos com perfis serão deixados em branco quando não houver identidade histórica comprovada.',
@@ -158,7 +162,7 @@ const AdminSeasonHistory = () => {
     } finally {
       setArchiving(false);
     }
-  }, [preview, unresolvedKnockouts.length]);
+  }, [preview, unresolvedKnockouts.length, notPlayedTournaments]);
 
   const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
   const pendingTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'pending').length ?? 0;
@@ -288,6 +292,24 @@ const AdminSeasonHistory = () => {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {tournament.kind === 'knockout' && tournament.status !== 'complete' && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={notPlayedTournaments.includes(tournament.slug) ? 'secondary' : 'outline'}
+                          onClick={() => setNotPlayedTournaments(current =>
+                            current.includes(tournament.slug)
+                              ? current.filter(slug => slug !== tournament.slug)
+                              : [...current, tournament.slug]
+                          )}
+                        >
+                          {notPlayedTournaments.includes(tournament.slug) ? 'Desfazer: edição não disputada' : 'Marcar edição como não disputada'}
+                        </Button>
+                        {notPlayedTournaments.includes(tournament.slug) && (
+                          <Badge variant="outline">Será arquivado como não disputado</Badge>
+                        )}
                       </div>
                     )}
                     {tournament.warnings.map((warning, index) => (
