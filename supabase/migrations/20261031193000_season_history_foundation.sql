@@ -114,6 +114,13 @@ CREATE POLICY "Admins can insert season archive events"
   ON public.season_archive_events FOR INSERT TO authenticated
   WITH CHECK (public.is_admin(auth.uid()) AND actor_id = auth.uid());
 
+-- Explicitly remove inherited/default privileges before granting the minimum
+-- access required by the client. RLS policies do not replace SQL privileges.
+REVOKE ALL ON public.season_archives FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.season_archive_standings FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.season_archive_competitions FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.season_archive_events FROM PUBLIC, anon, authenticated;
+
 -- Authenticated clients are read-only. Writes are performed only by the
 -- SECURITY DEFINER archive RPC after its administrator check.
 GRANT SELECT ON public.season_archives TO authenticated;
