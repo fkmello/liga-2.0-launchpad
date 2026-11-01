@@ -23,6 +23,7 @@ const AdminSeasonHistory = () => {
   const [archiving, setArchiving] = useState(false);
   const [notPlayedTournaments, setNotPlayedTournaments] = useState<string[]>([]);
   const [seasonFinalized, setSeasonFinalized] = useState(false);
+  const [settingsVerified, setSettingsVerified] = useState(false);
   const unresolvedKnockouts = preview?.tournaments.filter(
     item => item.kind === 'knockout' && item.status !== 'complete' && !notPlayedTournaments.includes(item.slug),
   ) ?? [];
@@ -38,6 +39,7 @@ const AdminSeasonHistory = () => {
     setPreview(null);
     setNotPlayedTournaments([]);
     setSeasonFinalized(false);
+    setSettingsVerified(false);
     const [cacheResult, settingsResult] = await Promise.all([
       supabase
         .from('sheets_cache')
@@ -54,6 +56,7 @@ const AdminSeasonHistory = () => {
       return;
     }
 
+    setSettingsVerified(!settingsResult.error);
     const settings = (settingsResult.data ?? []) as TournamentSettingSnapshot[];
     const result = buildSeasonHistoryPreview(parsedSeason, (cacheResult.data ?? []) as any, settings);
     if (settingsResult.error) result.warnings.unshift('Não foi possível consultar as configurações dos torneios; a situação de habilitação/finalização precisa ser conferida manualmente.');
@@ -65,6 +68,10 @@ const AdminSeasonHistory = () => {
 
   const archivePreview = useCallback(async () => {
     if (!preview) return;
+    if (!settingsVerified) {
+      toast.error('Não foi possível verificar as configurações dos torneios. Atualize a prévia antes de arquivar.');
+      return;
+    }
     if (!seasonFinalized) {
       toast.error('Confirme que a temporada foi oficialmente encerrada antes de arquivar.');
       return;
@@ -170,7 +177,7 @@ const AdminSeasonHistory = () => {
     } finally {
       setArchiving(false);
     }
-  }, [preview, unresolvedKnockouts.length, notPlayedTournaments, seasonFinalized]);
+  }, [preview, unresolvedKnockouts.length, notPlayedTournaments, seasonFinalized, settingsVerified]);
 
   const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
   const pendingTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'pending').length ?? 0;
@@ -355,6 +362,12 @@ const AdminSeasonHistory = () => {
               ))}
             </section>
 
+            {!settingsVerified && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>Não foi possível confirmar as configurações dos torneios. O arquivamento fica bloqueado até gerar uma prévia com essa consulta concluída.</AlertDescription>
+              </Alert>
+            )}
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -390,7 +403,7 @@ const AdminSeasonHistory = () => {
                 Nenhum perfil será associado automaticamente. A confirmação é permanente e protegida contra duplicidade.
               </AlertDescription>
             </Alert>
-            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || !seasonFinalized || preview.standings.length === 0 || unresolvedKnockouts.length > 0}>
+            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || !settingsVerified || !seasonFinalized || preview.standings.length === 0 || unresolvedKnockouts.length > 0}>
               {archiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
               {archiving ? 'Arquivando temporada...' : 'Confirmar arquivamento permanente'}
             </Button>
