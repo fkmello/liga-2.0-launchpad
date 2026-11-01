@@ -43,6 +43,7 @@ export type SeasonHistoryPreview = {
   season: number;
   generatedAt: string;
   rankingSource: { cacheKey: string; syncedAt: string | null } | null;
+  rankingSnapshot: Record<string, any> | null;
   standings: PreviewStanding[];
   tournaments: TournamentPreview[];
   warnings: string[];
@@ -245,6 +246,7 @@ export function buildSeasonHistoryPreview(
     season,
     generatedAt: new Date().toISOString(),
     rankingSource: ranking ? { cacheKey: ranking.cache_key, syncedAt: ranking.synced_at } : null,
+    rankingSnapshot: ranking?.data ?? null,
     standings,
     tournaments: TOURNAMENT_SOURCES.map(config => tournamentPreview(config, byKey)),
     warnings,
