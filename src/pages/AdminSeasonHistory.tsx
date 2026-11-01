@@ -13,6 +13,7 @@ import {
   buildSeasonHistoryPreview,
   SEASON_HISTORY_CACHE_KEYS,
   type SeasonHistoryPreview,
+  type TournamentSettingSnapshot,
 } from '@/lib/seasonHistoryPreview';
 
 const AdminSeasonHistory = () => {
@@ -29,18 +30,25 @@ const AdminSeasonHistory = () => {
 
     setLoading(true);
     setPreview(null);
-    const { data, error } = await supabase
-      .from('sheets_cache')
-      .select('cache_key, type, synced_at, data')
-      .in('cache_key', [...SEASON_HISTORY_CACHE_KEYS]);
+    const [cacheResult, settingsResult] = await Promise.all([
+      supabase
+        .from('sheets_cache')
+        .select('cache_key, type, synced_at, data')
+        .in('cache_key', [...SEASON_HISTORY_CACHE_KEYS]),
+      supabase
+        .from('tournament_settings')
+        .select('slug, enabled, finished'),
+    ]);
 
-    if (error) {
-      toast.error('Não foi possível ler os caches da temporada: ' + error.message);
+    if (cacheResult.error) {
+      toast.error('Não foi possível ler os caches da temporada: ' + cacheResult.error.message);
       setLoading(false);
       return;
     }
 
-    const result = buildSeasonHistoryPreview(parsedSeason, (data ?? []) as any);
+    const settings = (settingsResult.data ?? []) as TournamentSettingSnapshot[];
+    const result = buildSeasonHistoryPreview(parsedSeason, (cacheResult.data ?? []) as any, settings);
+    if (settingsResult.error) result.warnings.unshift('Não foi possível consultar as configurações dos torneios; a situação de habilitação/finalização precisa ser conferida manualmente.');
     setPreview(result);
     setLoading(false);
     toast.success('Prévia gerada. Nenhum dado foi gravado ou arquivado.');
@@ -153,7 +161,7 @@ const AdminSeasonHistory = () => {
                     <div className="flex items-center justify-between gap-3">
                       <CardTitle className="text-base">{tournament.name}</CardTitle>
                       <Badge variant={tournament.status === 'complete' ? 'default' : 'secondary'}>
-                        {tournament.kind === 'standings' ? (tournament.standingsCount > 0 ? 'Classificação disponível' : 'Pendente') : tournament.status === 'complete' ? 'Pódio identificado' : tournament.status === 'pending' ? 'Pendente' : 'Sem cache'}
+                        {tournament.enabled === false && tournament.finished === false ? 'Confirmar se disputado' : tournament.finished && tournament.status !== 'complete' && tournament.kind === 'knockout' ? 'Finalizado — dados incompletos' : tournament.kind === 'standings' ? (tournament.standingsCount > 0 ? 'Classificação disponível' : 'Pendente') : tournament.status === 'complete' ? 'Pódio identificado' : tournament.status === 'pending' ? 'Pendente' : 'Sem cache'}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
