@@ -3,7 +3,11 @@
 \i supabase/migrations/20261031193000_season_history_foundation.sql
 \i supabase/migrations/20261101130000_archive_season_history_rpc.sql
 
-DO $$
+INSERT INTO public.season_archives (league, season, status, summary)
+VALUES ('ci-draft-visibility', 2097, 'draft', '{}'::jsonb);
+
+SET ROLE authenticated;
+DO $
 DECLARE
   v_id uuid;
   v_payload jsonb := '{
@@ -19,7 +23,7 @@ DECLARE
     ]
   }'::jsonb;
 BEGIN
-  -- The function is locked down to the authenticated role and must reject a normal user.
+  -- Invoke the RPC as authenticated, matching the Supabase Data API SQL role.
   PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
   BEGIN
     PERFORM public.archive_season_history(v_payload);
@@ -71,20 +75,32 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.season_archives WHERE league='ci-test' AND season=2099) THEN
     RAISE EXCEPTION 'FAIL: failed archive was not atomic';
   END IF;
-END $$;
+  IF (SELECT count(*) FROM public.season_archives WHERE league='ci-draft-visibility') <> 1 THEN
+    RAISE EXCEPTION 'FAIL: admin cannot read draft archive';
+  END IF;
+  IF has_table_privilege(current_user,'public.season_archives','INSERT')
+     OR has_table_privilege(current_user,'public.season_archives','UPDATE')
+     OR has_table_privilege(current_user,'public.season_archives','DELETE') THEN
+    RAISE EXCEPTION 'FAIL: authenticated role has direct write privileges';
+  END IF;
+END $;
+RESET ROLE;
 
--- Exercise RLS as authenticated non-admin: only published archives are visible.
+-- A normal authenticated user can read published rows but must not see drafts.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
-DO $$
+DO $
 BEGIN
   IF (SELECT count(*) FROM public.season_archives WHERE league='ci-test') <> 1 THEN
     RAISE EXCEPTION 'FAIL: authenticated user cannot read published archive';
   END IF;
+  IF (SELECT count(*) FROM public.season_archives WHERE league='ci-draft-visibility') <> 0 THEN
+    RAISE EXCEPTION 'FAIL: draft archive leaked to non-admin';
+  END IF;
   IF has_table_privilege(current_user,'public.season_archives','INSERT') THEN
     RAISE EXCEPTION 'FAIL: authenticated role has direct INSERT privilege';
   END IF;
-END $$;
+END $;
 RESET ROLE;
 
 -- Confirm RPC is not executable by anon.
