@@ -45,12 +45,16 @@ describe('season history preview collector', () => {
         ] } },
       },
     };
-    const preview = buildSeasonHistoryPreview(2026, [snapshot]);
+    const preview = buildSeasonHistoryPreview(2026, [snapshot, {
+      cache_key: 'ranking_liga:ANUAL', type: 'classificacao', synced_at: '2026-10-31T12:00:00Z',
+      data: { rankings: [{ position: '1', teamName: 'Equipe A', badge: '', total: '100,00' }] },
+    }]);
     const liberta = preview.tournaments.find(item => item.slug === 'libertadores')!;
     expect(liberta.status).toBe('complete');
     expect(liberta.podium.map(item => item.teamName)).toEqual(['Equipe A', 'Equipe B', 'Equipe D']);
     expect(liberta.podium[0].badgeUrl).toBe('https://example.com/a.png');
     expect(liberta.podium[2].decidedManually).toBe(true);
+    expect(preview.standings[0].cartolaTeamId).toBe('1');
   });
 
   it('does not infer a winner from an unresolved aggregate tie', () => {
