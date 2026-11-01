@@ -284,3 +284,7 @@ Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas 
 
 - A etapa de revisão agora bloqueia o arquivamento enquanto qualquer torneio eliminatório estiver sem pódio confirmado. Antes do fechamento, será preciso atualizar o resultado ou implementar/usar uma declaração administrativa explícita de edição não disputada.
 - As tabelas históricas concedem somente leitura a usuários autenticados. As gravações são feitas pela RPC protegida; clientes autenticados não recebem privilégios diretos de UPDATE/DELETE/INSERT, reduzindo o risco de alteração posterior do arquivo.
+
+- A revisão permite marcar explicitamente cada torneio eliminatório sem pódio como `not_played`; essa decisão aparece no resumo de confirmação. Sem resolver ou marcar todas as edições como não disputadas, o botão de arquivamento permanece bloqueado.
+- A lista arquivada inclui também torneios sem cache, preservando o fato de que foram revisados e classificados como pendentes ou não disputados, em vez de omiti-los silenciosamente.
+- A tipagem local do cliente Supabase foi atualizada para reconhecer a RPC `archive_season_history`.
