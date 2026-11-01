@@ -14,9 +14,9 @@ CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
 CREATE OR REPLACE FUNCTION auth.uid()
 RETURNS uuid LANGUAGE sql STABLE
 AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-DO $ BEGIN
+DO $body$ BEGIN
   CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
-EXCEPTION WHEN duplicate_object THEN NULL; END $;
+EXCEPTION WHEN duplicate_object THEN NULL; END $body$;
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY,
   user_id uuid UNIQUE NOT NULL REFERENCES auth.users(id),
