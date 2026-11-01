@@ -55,6 +55,21 @@ export type SeasonHistoryPreview = {
   warnings: string[];
 };
 
+type KnockoutFormat = {
+  earlierRounds: 'two_legged' | 'single_match';
+  final: 'single_match';
+  thirdPlace: 'single_match';
+};
+
+const KNOCKOUT_FORMATS: Record<string, KnockoutFormat> = {
+  'copa-do-brasil': { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
+  libertadores: { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
+  sulamericana: { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
+  'champions-league': { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
+  'copa-do-mundo': { earlierRounds: 'single_match', final: 'single_match', thirdPlace: 'single_match' },
+  'copa-intercontinental': { earlierRounds: 'single_match', final: 'single_match', thirdPlace: 'single_match' },
+};
+
 const TOURNAMENT_SOURCES = [
   { slug: 'brasileirao-serie-a', name: 'Brasileirão Série A', keys: ['shadow/brasileirao_serie_a/2026'], kind: 'standings' },
   { slug: 'brasileirao-serie-b', name: 'Brasileirão Série B', keys: ['shadow/brasileirao_serie_b/2026'], kind: 'standings' },
@@ -107,7 +122,11 @@ function getMatchType(match: Record<string, any>): 'final' | 'third' | null {
   return null;
 }
 
-function resolveMatch(match: Record<string, any>, teams: Map<string, { id: string | null; badge: string | null }>) {
+function resolveMatch(
+  match: Record<string, any>,
+  teams: Map<string, { id: string | null; badge: string | null }>,
+  format: 'single_match' | 'two_legged',
+) {
   const team1 = String(match.team1 ?? '').trim();
   const team2 = String(match.team2 ?? '').trim();
   if (!team1 || !team2) return null;
@@ -118,10 +137,14 @@ function resolveMatch(match: Record<string, any>, teams: Map<string, { id: strin
   const volta2 = parseCartolaNumber(match.scoreVolta2);
   const hasReturnLeg = match.scoreVolta1 !== undefined && match.scoreVolta2 !== undefined &&
     String(match.scoreVolta1).trim() !== '' && String(match.scoreVolta2).trim() !== '';
-  if (ida1 === null || ida2 === null || (hasReturnLeg && (volta1 === null || volta2 === null))) return null;
 
-  const scoreFor = ida1 + (hasReturnLeg ? volta1! : 0);
-  const scoreAgainst = ida2 + (hasReturnLeg ? volta2! : 0);
+  // Partidas únicas usam somente o placar da própria partida. Confrontos em
+  // ida e volta só podem ser resolvidos quando os dois jogos têm placar válido.
+  if (ida1 === null || ida2 === null) return null;
+  if (format === 'two_legged' && (!hasReturnLeg || volta1 === null || volta2 === null)) return null;
+
+  const scoreFor = format === 'two_legged' ? ida1 + volta1! : ida1;
+  const scoreAgainst = format === 'two_legged' ? ida2 + volta2! : ida2;
   const manualWinner = String(match.manualWinner ?? '').trim();
   let winner: string | null = null;
   let loser: string | null = null;
@@ -148,12 +171,18 @@ function resolveMatch(match: Record<string, any>, teams: Map<string, { id: strin
   };
 }
 
-function buildPodium(data: Record<string, any>, finalMatches: Record<string, any>[]) {
+function buildPodium(
+  data: Record<string, any>,
+  finalMatches: Record<string, any>[],
+  format: KnockoutFormat,
+) {
   const teams = externalTeamMap(data);
-  const finalMatch = finalMatches.find(match => getMatchType(match) === 'final') ?? (finalMatches.length === 1 ? finalMatches[0] : null);
+  // Não presumir que a única partida da fase seja a final: a identificação
+  // precisa ser explícita para evitar transformar semifinal em campeão.
+  const finalMatch = finalMatches.find(match => getMatchType(match) === 'final');
   const thirdMatch = finalMatches.find(match => getMatchType(match) === 'third');
-  const finalResult = finalMatch ? resolveMatch(finalMatch, teams) : null;
-  const thirdResult = thirdMatch ? resolveMatch(thirdMatch, teams) : null;
+  const finalResult = finalMatch ? resolveMatch(finalMatch, teams, format.final) : null;
+  const thirdResult = thirdMatch ? resolveMatch(thirdMatch, teams, format.thirdPlace) : null;
   const podium: PreviewPodiumEntry[] = [];
   if (finalResult) {
     podium.push({ position: 1, ...finalResult.winner });
@@ -184,7 +213,10 @@ function tournamentPreview(
 
   const warnings: string[] = [];
   const finalMatches = findFinalMatches(selected.data);
-  const result = buildPodium(selected.data, finalMatches);
+  const knockoutFormat = KNOCKOUT_FORMATS[config.slug];
+  const result = config.kind === 'knockout' && knockoutFormat
+    ? buildPodium(selected.data, finalMatches, knockoutFormat)
+    : { podium: [] as PreviewPodiumEntry[], unresolved: 'Formato de mata-mata não configurado para esta competição.', thirdMissing: false, hasThirdMatch: false };
   const standingsRows = selected.data?.standings?.grupos?.geral ?? selected.data?.classificacao?.rows ?? [];
   const standingsCount = Array.isArray(standingsRows) ? standingsRows.length : 0;
   if (config.kind === 'standings') {
