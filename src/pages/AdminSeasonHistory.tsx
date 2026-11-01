@@ -162,7 +162,8 @@ const AdminSeasonHistory = () => {
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {tournament.kind === 'standings' && tournament.standingsCount > 0 && <p className="text-sm text-muted-foreground">{tournament.standingsCount} equipes na classificação geral da série.</p>}\n                    {tournament.kind === 'knockout' && tournament.podium.length > 0 && (
+                    {tournament.kind === 'standings' && tournament.standingsCount > 0 && <p className="text-sm text-muted-foreground">{tournament.standingsCount} equipes na classificação geral da série.</p>}
+                    {tournament.kind === 'knockout' && tournament.podium.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {tournament.podium.map(entry => (
                           <div key={entry.position} className="rounded-md border p-3 flex items-center gap-2">
