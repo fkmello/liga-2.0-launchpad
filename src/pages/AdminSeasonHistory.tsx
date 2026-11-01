@@ -186,7 +186,26 @@ const AdminSeasonHistory = () => {
                       </p>
                     )}
                     {tournament.finalMatches.length > 0 && (
-                      <p className="text-xs text-muted-foreground">{tournament.finalMatches.length} confronto(s) encontrados na fase final.</p>
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground">Confrontos da fase final</p>
+                        {tournament.finalMatches.map((match, index) => {
+                          const ida1 = match.scoreIda1 ?? match.score1 ?? '—';
+                          const ida2 = match.scoreIda2 ?? match.score2 ?? '—';
+                          const volta1 = match.scoreVolta1;
+                          const volta2 = match.scoreVolta2;
+                          const hasReturnLeg = String(volta1 ?? '').trim() !== '' || String(volta2 ?? '').trim() !== '';
+                          return (
+                            <div key={index} className="rounded-md border p-3 text-sm space-y-1">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-medium">{match.matchNumber ?? match.tipo ?? `Confronto ${index + 1}`}</span>
+                                {match.manualWinner && <Badge variant="outline">Decisão manual: {match.manualWinner}</Badge>}
+                              </div>
+                              <p>{match.team1 || 'Equipe a definir'} <span className="font-semibold tabular-nums">{ida1} × {ida2}</span> {match.team2 || 'Equipe a definir'}</p>
+                              {hasReturnLeg && <p className="text-xs text-muted-foreground">Volta: {volta1 || '—'} × {volta2 || '—'}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
