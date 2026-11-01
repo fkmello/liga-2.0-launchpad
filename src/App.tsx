@@ -22,6 +22,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AdminTournaments from "./pages/AdminTournaments";
 import AdminLeague from "./pages/AdminLeague";
 import AdminSeasonHistory from "./pages/AdminSeasonHistory";
+import SeasonHistory from "./pages/SeasonHistory";
 import Profile from "./pages/Profile";
 import LeagueSelect from "./pages/LeagueSelect";
 import ForgotPassword from "./pages/ForgotPassword";
