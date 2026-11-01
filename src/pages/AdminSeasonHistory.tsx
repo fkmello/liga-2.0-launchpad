@@ -146,14 +146,14 @@ const AdminSeasonHistory = () => {
             </Card>
 
             <section className="space-y-3">
-              <h2 className="font-semibold">Fontes dos torneios e pódios identificados</h2>
+              <h2 className="font-semibold">Fontes de classificação e torneios</h2>
               {preview.tournaments.map(tournament => (
                 <Card key={tournament.slug}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between gap-3">
                       <CardTitle className="text-base">{tournament.name}</CardTitle>
                       <Badge variant={tournament.status === 'complete' ? 'default' : 'secondary'}>
-                        {tournament.status === 'complete' ? 'Pódio identificado' : tournament.status === 'pending' ? 'Pendente' : 'Sem cache'}
+                        {tournament.kind === 'standings' ? (tournament.standingsCount > 0 ? 'Classificação disponível' : 'Pendente') : tournament.status === 'complete' ? 'Pódio identificado' : tournament.status === 'pending' ? 'Pendente' : 'Sem cache'}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -162,7 +162,7 @@ const AdminSeasonHistory = () => {
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {tournament.podium.length > 0 && (
+                    {tournament.kind === 'standings' && tournament.standingsCount > 0 && <p className="text-sm text-muted-foreground">{tournament.standingsCount} equipes na classificação geral da série.</p>}\n                    {tournament.kind === 'knockout' && tournament.podium.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {tournament.podium.map(entry => (
                           <div key={entry.position} className="rounded-md border p-3 flex items-center gap-2">
