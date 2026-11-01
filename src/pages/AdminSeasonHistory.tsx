@@ -46,8 +46,8 @@ const AdminSeasonHistory = () => {
     toast.success('Prévia gerada. Nenhum dado foi gravado ou arquivado.');
   }, [season]);
 
-  const completeTournaments = preview?.tournaments.filter(item => item.status === 'complete').length ?? 0;
-  const pendingTournaments = preview?.tournaments.filter(item => item.status === 'pending').length ?? 0;
+  const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
+  const pendingTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'pending').length ?? 0;
   const missingTournaments = preview?.tournaments.filter(item => item.status === 'not_found').length ?? 0;
 
   return (
