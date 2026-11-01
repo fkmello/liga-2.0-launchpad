@@ -20,6 +20,7 @@ const AdminSeasonHistory = () => {
   const [season, setSeason] = useState('2026');
   const [preview, setPreview] = useState<SeasonHistoryPreview | null>(null);
   const [loading, setLoading] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const generatePreview = useCallback(async () => {
     const parsedSeason = Number(season);
@@ -53,6 +54,93 @@ const AdminSeasonHistory = () => {
     setLoading(false);
     toast.success('Prévia gerada. Nenhum dado foi gravado ou arquivado.');
   }, [season]);
+
+
+  const archivePreview = useCallback(async () => {
+    if (!preview) return;
+    if (preview.standings.length === 0 || preview.standings.some(row => row.totalPoints === null)) {
+      toast.error('A classificação precisa ter equipes e pontuações válidas antes do arquivamento.');
+      return;
+    }
+
+    const competitions = preview.tournaments
+      .filter(item => item.sourceSnapshot !== null)
+      .map(item => {
+        const champion = item.podium.find(entry => entry.position === 1);
+        const runnerUp = item.podium.find(entry => entry.position === 2);
+        const third = item.podium.find(entry => entry.position === 3);
+        return {
+          slug: item.slug,
+          name: item.name,
+          source_provider: item.sourceProvider,
+          source_format: item.sourceFormat,
+          // Classificações auxiliares e torneios sem decisão completa permanecem pendentes.
+          status: item.kind === 'knockout' && item.status === 'complete' ? 'complete' : 'pending',
+          champion_name: champion?.teamName ?? null,
+          champion_badge_url: champion?.badgeUrl ?? null,
+          runner_up_name: runnerUp?.teamName ?? null,
+          runner_up_badge_url: runnerUp?.badgeUrl ?? null,
+          third_place_name: third?.teamName ?? null,
+          third_place_badge_url: third?.badgeUrl ?? null,
+          final_score: { matches: item.finalMatches, podium: item.podium },
+          source_snapshot: {
+            selected: item.sourceSnapshot,
+            alternates: item.alternateSnapshots,
+            cache_key: item.sourceCacheKey,
+            synced_at: item.sourceSyncedAt,
+            warnings: item.warnings,
+          },
+        };
+      });
+
+    const pending = competitions.filter(item => item.status === 'pending').length;
+    const message = [
+      'CONFIRMAR ARQUIVAMENTO PERMANENTE?',
+      '',
+      `Temporada: ${preview.season}`,
+      `Classificação: ${preview.standings.length} equipes`,
+      `Torneios com fonte disponível: ${competitions.length}`,
+      `Torneios que ficarão pendentes para conferência: ${pending}`,
+      '',
+      'A operação não poderá ser repetida para esta liga/temporada.',
+      'Os vínculos com perfis serão deixados em branco quando não houver identidade histórica comprovada.',
+      '',
+      'Deseja continuar?',
+    ].join('\\n');
+    if (!window.confirm(message)) return;
+
+    setArchiving(true);
+    const { data, error } = await supabase.rpc('archive_season_history', {
+      p_payload: {
+        league: 'liga-jacarandas',
+        season: preview.season,
+        summary: {
+          generatedAt: preview.generatedAt,
+          rankingSource: preview.rankingSource,
+          rankingSnapshot: preview.rankingSnapshot,
+          warnings: preview.warnings,
+          archivedFrom: 'admin-season-history-preview',
+        },
+        standings: preview.standings.map(row => ({
+          position: row.position,
+          team_name: row.teamName,
+          cartola_team_id: row.cartolaTeamId,
+          badge_url: row.badgeUrl,
+          total_points: row.totalPoints,
+          source_snapshot: row.sourceSnapshot,
+        })),
+        competitions,
+      },
+    });
+    setArchiving(false);
+
+    if (error) {
+      toast.error('Não foi possível arquivar: ' + error.message);
+      return;
+    }
+    toast.success('Histórico arquivado permanentemente. ID: ' + String(data));
+    setPreview(null);
+  }, [preview]);
 
   const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
   const pendingTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'pending').length ?? 0;
@@ -219,6 +307,19 @@ const AdminSeasonHistory = () => {
                 </Card>
               ))}
             </section>
+
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Revisão final: o arquivamento grava uma cópia imutável da classificação e dos snapshots disponíveis.
+                Torneios sem resultado decisivo ficam como pendentes; fontes auxiliares de Série A/B/C não geram campeões.
+                Nenhum perfil será associado automaticamente. A confirmação é permanente e protegida contra duplicidade.
+              </AlertDescription>
+            </Alert>
+            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || preview.standings.length === 0}>
+              {archiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
+              {archiving ? 'Arquivando temporada...' : 'Confirmar arquivamento permanente'}
+            </Button>
           </>
         )}
       </div>
