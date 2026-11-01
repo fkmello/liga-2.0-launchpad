@@ -24,7 +24,7 @@ BEGIN
   END IF;
 
   IF jsonb_typeof(p_payload->'summary') IS DISTINCT FROM 'object'
-     OR COALESCE((p_payload->'summary'->>'seasonFinalized')::boolean, false) IS NOT TRUE THEN
+     OR (p_payload->'summary'->'seasonFinalized') IS DISTINCT FROM 'true'::jsonb THEN
     RAISE EXCEPTION 'A temporada ainda não foi confirmada como encerrada pelo administrador.';
   END IF;
 
