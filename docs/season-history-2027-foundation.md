@@ -281,3 +281,6 @@ Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas 
 - A função é `SECURITY DEFINER`, verifica `public.is_admin(auth.uid())`, restringe execução a `authenticated` e não expõe service-role no cliente.
 - A migration ainda não foi aplicada ao Supabase de produção. O fluxo permanece no PR/Preview; nenhum arquivamento real foi executado.
 - A interface exige classificação com pontuação em todas as linhas e mostra um resumo antes da confirmação. Pendências são preservadas como pendências para revisão posterior.
+
+- A etapa de revisão agora bloqueia o arquivamento enquanto qualquer torneio eliminatório estiver sem pódio confirmado. Antes do fechamento, será preciso atualizar o resultado ou implementar/usar uma declaração administrativa explícita de edição não disputada.
+- As tabelas históricas concedem somente leitura a usuários autenticados. As gravações são feitas pela RPC protegida; clientes autenticados não recebem privilégios diretos de UPDATE/DELETE/INSERT, reduzindo o risco de alteração posterior do arquivo.
