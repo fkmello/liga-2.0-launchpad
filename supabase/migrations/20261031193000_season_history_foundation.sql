@@ -79,40 +79,40 @@ ALTER TABLE public.season_archive_events ENABLE ROW LEVEL SECURITY;
 -- Administradores também podem revisar rascunhos e gerenciar o arquivo.
 CREATE POLICY "Authenticated can read published season archives"
   ON public.season_archives FOR SELECT TO authenticated
-  USING (status = 'archived' OR public.is_admin(auth.uid()));
+  USING (status = 'archived' OR (select public.is_admin((select auth.uid()))));
 CREATE POLICY "Admins can manage season archives"
   ON public.season_archives FOR ALL TO authenticated
-  USING (public.is_admin(auth.uid()))
-  WITH CHECK (public.is_admin(auth.uid()));
+  USING ((select public.is_admin((select auth.uid()))))
+  WITH CHECK ((select public.is_admin((select auth.uid()))));
 
 CREATE POLICY "Authenticated can read standings from published archives"
   ON public.season_archive_standings FOR SELECT TO authenticated
   USING (EXISTS (
     SELECT 1 FROM public.season_archives a
-    WHERE a.id = archive_id AND (a.status = 'archived' OR public.is_admin(auth.uid()))
+    WHERE a.id = archive_id AND (a.status = 'archived' OR (select public.is_admin((select auth.uid()))))
   ));
 CREATE POLICY "Admins can manage archived standings"
   ON public.season_archive_standings FOR ALL TO authenticated
-  USING (public.is_admin(auth.uid()))
-  WITH CHECK (public.is_admin(auth.uid()));
+  USING ((select public.is_admin((select auth.uid()))))
+  WITH CHECK ((select public.is_admin((select auth.uid()))));
 
 CREATE POLICY "Authenticated can read competitions from published archives"
   ON public.season_archive_competitions FOR SELECT TO authenticated
   USING (EXISTS (
     SELECT 1 FROM public.season_archives a
-    WHERE a.id = archive_id AND (a.status = 'archived' OR public.is_admin(auth.uid()))
+    WHERE a.id = archive_id AND (a.status = 'archived' OR (select public.is_admin((select auth.uid()))))
   ));
 CREATE POLICY "Admins can manage archived competitions"
   ON public.season_archive_competitions FOR ALL TO authenticated
-  USING (public.is_admin(auth.uid()))
-  WITH CHECK (public.is_admin(auth.uid()));
+  USING ((select public.is_admin((select auth.uid()))))
+  WITH CHECK ((select public.is_admin((select auth.uid()))));
 
 CREATE POLICY "Admins can read season archive events"
   ON public.season_archive_events FOR SELECT TO authenticated
-  USING (public.is_admin(auth.uid()));
+  USING ((select public.is_admin((select auth.uid()))));
 CREATE POLICY "Admins can insert season archive events"
   ON public.season_archive_events FOR INSERT TO authenticated
-  WITH CHECK (public.is_admin(auth.uid()) AND actor_id = auth.uid());
+  WITH CHECK ((select public.is_admin((select auth.uid()))) AND actor_id = (select auth.uid()));
 
 -- Explicitly remove inherited/default privileges before granting the minimum
 -- access required by the client. RLS policies do not replace SQL privileges.
