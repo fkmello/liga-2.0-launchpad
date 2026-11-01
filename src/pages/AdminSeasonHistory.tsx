@@ -123,36 +123,41 @@ const AdminSeasonHistory = () => {
     }
 
     setArchiving(true);
-    const { data, error } = await supabase.rpc('archive_season_history', {
-      p_payload: {
-        league: 'liga-jacarandas',
-        season: preview.season,
-        summary: {
-          generatedAt: preview.generatedAt,
-          rankingSource: preview.rankingSource,
-          rankingSnapshot: preview.rankingSnapshot,
-          warnings: preview.warnings,
-          archivedFrom: 'admin-season-history-preview',
+    try {
+      const { data, error } = await supabase.rpc('archive_season_history', {
+        p_payload: {
+          league: 'liga-jacarandas',
+          season: preview.season,
+          summary: {
+            generatedAt: preview.generatedAt,
+            rankingSource: preview.rankingSource,
+            rankingSnapshot: preview.rankingSnapshot,
+            warnings: preview.warnings,
+            archivedFrom: 'admin-season-history-preview',
+          },
+          standings: preview.standings.map(row => ({
+            position: row.position,
+            team_name: row.teamName,
+            cartola_team_id: row.cartolaTeamId,
+            badge_url: row.badgeUrl,
+            total_points: row.totalPoints,
+            source_snapshot: row.sourceSnapshot,
+          })),
+          competitions,
         },
-        standings: preview.standings.map(row => ({
-          position: row.position,
-          team_name: row.teamName,
-          cartola_team_id: row.cartolaTeamId,
-          badge_url: row.badgeUrl,
-          total_points: row.totalPoints,
-          source_snapshot: row.sourceSnapshot,
-        })),
-        competitions,
-      },
-    });
-    setArchiving(false);
+      });
 
-    if (error) {
-      toast.error('Não foi possível arquivar: ' + error.message);
-      return;
+      if (error) {
+        toast.error('Não foi possível arquivar: ' + error.message);
+        return;
+      }
+      toast.success('Histórico arquivado permanentemente. ID: ' + String(data));
+      setPreview(null);
+    } catch (error) {
+      toast.error('Falha inesperada ao arquivar: ' + (error instanceof Error ? error.message : 'erro desconhecido'));
+    } finally {
+      setArchiving(false);
     }
-    toast.success('Histórico arquivado permanentemente. ID: ' + String(data));
-    setPreview(null);
   }, [preview, unresolvedKnockouts.length]);
 
   const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
