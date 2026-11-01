@@ -26,7 +26,7 @@ describe('season history preview collector', () => {
     expect(preview.standings[62].position).toBe(63);
   });
 
-  it('resolves a two-leg final and third-place match, preserving manual decisions', () => {
+  it('resolves single-match final and third-place results, preserving manual decisions', () => {
     const snapshot: CacheSnapshot = {
       cache_key: 'shadow/libertadores/2026',
       type: 'shadow_libertadores',
@@ -40,7 +40,7 @@ describe('season history preview collector', () => {
           ['Equipe D', '4', '', 'https://example.com/d.png'],
         ] },
         fases: { Final: { matches: [
-          { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '60,00', scoreVolta2: '75,00' },
+          { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', scoreIda1: '80,00', scoreIda2: '70,00' },
           { tipo: 'terceiro_lugar', team1: 'Equipe C', team2: 'Equipe D', scoreIda1: '50,00', scoreIda2: '50,00', manualWinner: 'Equipe D' },
         ] } },
       },
@@ -63,7 +63,7 @@ describe('season history preview collector', () => {
       type: 'campeoes',
       synced_at: null,
       data: { fases: { Final: { matches: [
-        { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', scoreIda1: '70,00', scoreIda2: '60,00', scoreVolta1: '60,00', scoreVolta2: '70,00' },
+        { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', scoreIda1: '70,00', scoreIda2: '60,00' },
       ] } } },
     }]);
     const champions = preview.tournaments.find(item => item.slug === 'champions-league')!;
@@ -71,4 +71,54 @@ describe('season history preview collector', () => {
     expect(champions.podium).toHaveLength(0);
     expect(champions.warnings.some(warning => warning.includes('não possui resultado decisivo'))).toBe(true);
   });
+});
+
+
+describe('competition knockout formats', () => {
+  const makeSnapshot = (cache_key: string, matches: Record<string, any>[]): CacheSnapshot => ({
+    cache_key,
+    type: 'knockout',
+    synced_at: '2026-11-01T12:00:00Z',
+    data: { fases: { Final: { matches } } },
+  });
+
+  it.each(['libertadores', 'sulamericana', 'champions-league'])(
+    '%s waits for the single-match final and third-place game to have scores',
+    (slug) => {
+      const cacheKey = slug === 'libertadores' ? 'shadow/libertadores/2026'
+        : slug === 'sulamericana' ? 'sulamericana:2026' : 'campeoes';
+      const preview = buildSeasonHistoryPreview(2026, [makeSnapshot(cacheKey, [
+        { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B' },
+        { tipo: 'terceiro_lugar', team1: 'Equipe C', team2: 'Equipe D' },
+      ])]);
+      const tournament = preview.tournaments.find(item => item.slug === slug)!;
+      expect(tournament.status).toBe('pending');
+      expect(tournament.podium).toHaveLength(0);
+    },
+  );
+
+  it('does not treat an unidentified single match as the final', () => {
+    const preview = buildSeasonHistoryPreview(2026, [makeSnapshot('copa_mundo', [
+      { tipo: 'semifinal', team1: 'Equipe A', team2: 'Equipe B', score1: '3', score2: '1' },
+    ])]);
+    const tournament = preview.tournaments.find(item => item.slug === 'copa-do-mundo')!;
+    expect(tournament.status).toBe('pending');
+    expect(tournament.podium).toHaveLength(0);
+  });
+
+  it.each(['copa-do-brasil', 'libertadores', 'sulamericana', 'champions-league'])(
+    '%s records a final and third-place match from one game each',
+    (slug) => {
+      const cacheKey = slug === 'copa-do-brasil' ? 'shadow/copa_brasil/2026'
+        : slug === 'libertadores' ? 'shadow/libertadores/2026'
+        : slug === 'sulamericana' ? 'sulamericana:2026' : 'campeoes';
+      const preview = buildSeasonHistoryPreview(2026, [makeSnapshot(cacheKey, [
+        { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', score1: '2', score2: '1' },
+        { tipo: 'terceiro_lugar', team1: 'Equipe C', team2: 'Equipe D', score1: '0', score2: '1' },
+      ])]);
+      const tournament = preview.tournaments.find(item => item.slug === slug)!;
+      expect(tournament.status).toBe('complete');
+      expect(tournament.podium.map(item => item.teamName)).toEqual(['Equipe A', 'Equipe B', 'Equipe D']);
+    },
+  );
 });
