@@ -35,6 +35,7 @@ const AdminSeasonHistory = () => {
 
     setLoading(true);
     setPreview(null);
+    setNotPlayedTournaments([]);
     const [cacheResult, settingsResult] = await Promise.all([
       supabase
         .from('sheets_cache')
@@ -353,7 +354,7 @@ const AdminSeasonHistory = () => {
                 <AlertDescription>
                   O arquivamento está bloqueado: {unresolvedKnockouts.length} torneio(s) eliminatório(s) ainda não têm pódio confirmado
                   ({unresolvedKnockouts.map(item => item.name).join(', ')}). Antes de fechar a temporada, será necessário atualizar os resultados
-                  ou registrar explicitamente que uma edição não foi disputada.
+                  ou marcá-la explicitamente como não disputada na própria revisão.
                 </AlertDescription>
               </Alert>
             )}
@@ -361,7 +362,7 @@ const AdminSeasonHistory = () => {
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 Revisão final: o arquivamento grava uma cópia imutável da classificação e dos snapshots disponíveis.
-                Torneios sem resultado decisivo ficam como pendentes; fontes auxiliares de Série A/B/C não geram campeões.
+                Torneios sem resultado decisivo ficam pendentes, a menos que você os marque como não disputados; fontes auxiliares de Série A/B/C não geram campeões.
                 Nenhum perfil será associado automaticamente. A confirmação é permanente e protegida contra duplicidade.
               </AlertDescription>
             </Alert>
