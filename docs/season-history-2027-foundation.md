@@ -292,3 +292,16 @@ Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas 
 - A RPC exige também `summary.seasonFinalized = true`, além da autorização administrativa. A interface solicita uma confirmação explícita de encerramento da temporada e alerta que 2026 ainda está em andamento; a função no banco repete essa validação para não depender apenas do frontend.
 - A validação SQL dos arrays JSON usa aliases explícitos de coluna para evitar ambiguidades no PostgreSQL.
 - O resumo de confirmação apresenta as linhas separadamente, facilitando a revisão dos totais antes da gravação.
+
+
+## Consulta pública do histórico — 01/11/2026
+
+- Criada a rota autenticada `/history`, protegida também pela seleção de liga.
+- A entrada "História" foi adicionada à navegação inferior.
+- A tela consulta somente `season_archives` com status `archived` e liga `liga-jacarandas`.
+- Ao selecionar uma temporada, carrega classificação e torneios exclusivamente das tabelas históricas.
+- A interface apresenta classificação completa, escudos, pontuação, campeão, vice e terceiro quando registrado.
+- Edições pendentes ou marcadas como não disputadas são identificadas sem inferir vencedores.
+- A tela não consulta `sheets_cache`, Cartola API nem endpoints de sincronização.
+- Como as migrations ainda não foram aplicadas, a tela exibirá estado vazio até existir um arquivo publicado.
+- A rota e as consultas continuam protegidas pelo RLS das tabelas históricas; somente usuários autenticados podem ler arquivos publicados.
