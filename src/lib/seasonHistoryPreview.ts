@@ -153,7 +153,7 @@ function buildPodium(data: Record<string, any>, finalMatches: Record<string, any
     podium.push({ position: 2, ...finalResult.loser });
   }
   if (thirdResult) podium.push({ position: 3, ...thirdResult.winner });
-  return { podium, unresolved: (!finalResult ? 'A final não possui resultado decisivo completo.' : null), thirdMissing: !thirdResult };
+  return { podium, unresolved: (!finalResult ? 'A final não possui resultado decisivo completo.' : null), thirdMissing: Boolean(thirdMatch) && !thirdResult, hasThirdMatch: Boolean(thirdMatch) };
 }
 
 function tournamentPreview(
@@ -235,7 +235,7 @@ export function buildSeasonHistoryPreview(
   if (conflictingNames.size) warnings.push(`Há ${conflictingNames.size} nome(s) de equipe associado(s) a mais de um ID Cartola entre os caches; a identificação foi deixada em branco para conferência manual.`);
   const withoutCartolaId = standings.filter(row => !row.cartolaTeamId).length;
   if (ranking && withoutCartolaId) warnings.push(`${withoutCartolaId} equipe(s) do ranking anual ainda não puderam ser vinculadas com segurança a um ID Cartola.`);
-  else if (standings.length !== 60) warnings.push(`A classificação anual contém ${standings.length} equipes; a quantidade esperada atualmente é 60, mas o total pode variar entre temporadas.`);
+  if (ranking && standings.length !== 60) warnings.push(`A classificação anual contém ${standings.length} equipes; a quantidade observada atualmente é 60, mas o total pode variar entre temporadas.`);
   if (ranking?.synced_at && Date.now() - new Date(ranking.synced_at).getTime() > 24 * 60 * 60 * 1000) {
     warnings.push('O ranking anual não é atualizado há mais de 24 horas.');
   }
