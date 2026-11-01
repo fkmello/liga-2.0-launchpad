@@ -114,10 +114,12 @@ CREATE POLICY "Admins can insert season archive events"
   ON public.season_archive_events FOR INSERT TO authenticated
   WITH CHECK (public.is_admin(auth.uid()) AND actor_id = auth.uid());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.season_archives TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.season_archive_standings TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.season_archive_competitions TO authenticated;
-GRANT SELECT, INSERT ON public.season_archive_events TO authenticated;
+-- Authenticated clients are read-only. Writes are performed only by the
+-- SECURITY DEFINER archive RPC after its administrator check.
+GRANT SELECT ON public.season_archives TO authenticated;
+GRANT SELECT ON public.season_archive_standings TO authenticated;
+GRANT SELECT ON public.season_archive_competitions TO authenticated;
+GRANT SELECT ON public.season_archive_events TO authenticated;
 GRANT ALL ON public.season_archives TO service_role;
 GRANT ALL ON public.season_archive_standings TO service_role;
 GRANT ALL ON public.season_archive_competitions TO service_role;
