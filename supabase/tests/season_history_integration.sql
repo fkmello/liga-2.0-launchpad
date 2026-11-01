@@ -7,7 +7,7 @@ INSERT INTO public.season_archives (league, season, status, summary)
 VALUES ('ci-draft-visibility', 2097, 'draft', '{}'::jsonb);
 
 SET ROLE authenticated;
-DO $
+DO $body$
 DECLARE
   v_id uuid;
   v_payload jsonb := '{
@@ -83,13 +83,13 @@ BEGIN
      OR has_table_privilege(current_user,'public.season_archives','DELETE') THEN
     RAISE EXCEPTION 'FAIL: authenticated role has direct write privileges';
   END IF;
-END $;
+END $body$;
 RESET ROLE;
 
 -- A normal authenticated user can read published rows but must not see drafts.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
-DO $
+DO $body$
 BEGIN
   IF (SELECT count(*) FROM public.season_archives WHERE league='ci-test') <> 1 THEN
     RAISE EXCEPTION 'FAIL: authenticated user cannot read published archive';
@@ -100,7 +100,7 @@ BEGIN
   IF has_table_privilege(current_user,'public.season_archives','INSERT') THEN
     RAISE EXCEPTION 'FAIL: authenticated role has direct INSERT privilege';
   END IF;
-END $;
+END $body$;
 RESET ROLE;
 
 -- Confirm RPC is not executable by anon.
