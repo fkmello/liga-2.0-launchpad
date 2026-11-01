@@ -14,14 +14,21 @@ CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
 CREATE OR REPLACE FUNCTION auth.uid()
 RETURNS uuid LANGUAGE sql STABLE
 AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+DO $ BEGIN
+  CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
+EXCEPTION WHEN duplicate_object THEN NULL; END $;
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY,
-  user_id uuid UNIQUE
+  user_id uuid UNIQUE NOT NULL REFERENCES auth.users(id),
+  team_name text NOT NULL DEFAULT 'Equipe de teste',
+  cartoleiro_name text NOT NULL DEFAULT 'Gestor de teste'
 );
 CREATE TABLE IF NOT EXISTS public.user_roles (
-  user_id uuid NOT NULL,
-  role text NOT NULL,
-  PRIMARY KEY (user_id, role)
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  role public.app_role NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, role)
 );
 CREATE OR REPLACE FUNCTION public.is_admin(_user_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
