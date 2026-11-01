@@ -22,6 +22,7 @@ const AdminSeasonHistory = () => {
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [notPlayedTournaments, setNotPlayedTournaments] = useState<string[]>([]);
+  const [seasonFinalized, setSeasonFinalized] = useState(false);
   const unresolvedKnockouts = preview?.tournaments.filter(
     item => item.kind === 'knockout' && item.status !== 'complete' && !notPlayedTournaments.includes(item.slug),
   ) ?? [];
@@ -36,6 +37,7 @@ const AdminSeasonHistory = () => {
     setLoading(true);
     setPreview(null);
     setNotPlayedTournaments([]);
+    setSeasonFinalized(false);
     const [cacheResult, settingsResult] = await Promise.all([
       supabase
         .from('sheets_cache')
@@ -63,6 +65,10 @@ const AdminSeasonHistory = () => {
 
   const archivePreview = useCallback(async () => {
     if (!preview) return;
+    if (!seasonFinalized) {
+      toast.error('Confirme que a temporada foi oficialmente encerrada antes de arquivar.');
+      return;
+    }
     if (unresolvedKnockouts.length > 0) {
       toast.error('Ainda existem torneios eliminatórios sem pódio confirmado. Resolva-os ou registre formalmente que não foram disputados antes de arquivar.');
       return;
@@ -135,6 +141,7 @@ const AdminSeasonHistory = () => {
           season: preview.season,
           summary: {
             generatedAt: preview.generatedAt,
+            seasonFinalized,
             rankingSource: preview.rankingSource,
             rankingSnapshot: preview.rankingSnapshot,
             warnings: preview.warnings,
@@ -163,7 +170,7 @@ const AdminSeasonHistory = () => {
     } finally {
       setArchiving(false);
     }
-  }, [preview, unresolvedKnockouts.length, notPlayedTournaments]);
+  }, [preview, unresolvedKnockouts.length, notPlayedTournaments, seasonFinalized]);
 
   const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
   const pendingTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'pending').length ?? 0;
@@ -348,6 +355,23 @@ const AdminSeasonHistory = () => {
               ))}
             </section>
 
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                O arquivamento é definitivo. Como a temporada 2026 ainda está em andamento, não faça esta confirmação agora.
+                Ela só deve ser marcada depois do encerramento oficial e da conferência de todos os resultados.
+              </AlertDescription>
+            </Alert>
+            <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={seasonFinalized}
+                onChange={event => setSeasonFinalized(event.target.checked)}
+                disabled={archiving}
+              />
+              <span>Confirmo que a temporada {preview.season} foi oficialmente encerrada e que a classificação anual e os torneios foram revisados.</span>
+            </label>
             {unresolvedKnockouts.length > 0 && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
@@ -366,7 +390,7 @@ const AdminSeasonHistory = () => {
                 Nenhum perfil será associado automaticamente. A confirmação é permanente e protegida contra duplicidade.
               </AlertDescription>
             </Alert>
-            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || preview.standings.length === 0 || unresolvedKnockouts.length > 0}>
+            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || !seasonFinalized || preview.standings.length === 0 || unresolvedKnockouts.length > 0}>
               {archiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
               {archiving ? 'Arquivando temporada...' : 'Confirmar arquivamento permanente'}
             </Button>
