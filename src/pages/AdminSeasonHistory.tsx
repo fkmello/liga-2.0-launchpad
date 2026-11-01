@@ -160,8 +160,7 @@ const AdminSeasonHistory = () => {
         <Alert>
           <Database className="h-4 w-4" />
           <AlertDescription>
-            Esta etapa faz somente leitura dos caches existentes para montar uma prévia. Não cria rascunhos,
-            não altera os caches e não arquiva informações.
+            A coleta lê os caches sem alterá-los. Revise a classificação e os torneios; o arquivamento só ocorre após confirmação explícita.
           </AlertDescription>
         </Alert>
 
