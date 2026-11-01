@@ -8,6 +8,7 @@ export type CacheSnapshot = {
 export type PreviewStanding = {
   position: number;
   teamName: string;
+  cartolaTeamId: string | null;
   badgeUrl: string | null;
   totalPoints: number | null;
   sourceSnapshot: Record<string, any>;
@@ -34,6 +35,7 @@ export type TournamentPreview = {
   finalMatches: Record<string, any>[];
   sourceSnapshot: Record<string, any> | null;
   alternateSources: Array<{ cacheKey: string; syncedAt: string | null }>;
+  alternateSnapshots: Array<{ cacheKey: string; syncedAt: string | null; data: Record<string, any> }>;
   warnings: string[];
 };
 
@@ -161,11 +163,12 @@ function tournamentPreview(
   const candidates = config.keys.map(key => snapshots.get(key)).filter(Boolean) as CacheSnapshot[];
   const selected = candidates[0] ?? null;
   const alternates = candidates.slice(1).map(row => ({ cacheKey: row.cache_key, syncedAt: row.synced_at }));
+  const alternateSnapshots = candidates.slice(1).map(row => ({ cacheKey: row.cache_key, syncedAt: row.synced_at, data: row.data }));
   if (!selected) {
     return {
       slug: config.slug, name: config.name, sourceCacheKey: null, sourceSyncedAt: null,
       sourceProvider: null, sourceFormat: null, status: 'not_found', podium: [], finalMatches: [],
-      sourceSnapshot: null, alternateSources: [], warnings: ['Nenhum cache disponível para esta competição.'],
+      sourceSnapshot: null, alternateSources: [], alternateSnapshots: [], warnings: ['Nenhum cache disponível para esta competição.'],
     };
   }
 
@@ -194,6 +197,7 @@ function tournamentPreview(
     finalMatches,
     sourceSnapshot: selected.data,
     alternateSources: alternates,
+    alternateSnapshots,
     warnings,
   };
 }
@@ -205,16 +209,32 @@ export function buildSeasonHistoryPreview(
   const byKey = new Map(snapshots.map(row => [row.cache_key, row]));
   const ranking = byKey.get('ranking_liga:ANUAL');
   const rankingRows = Array.isArray(ranking?.data?.rankings) ? ranking.data.rankings : [];
-  const standings = rankingRows.map((row: any, index: number) => ({
+  const externalIds = new Map<string, string>();
+  const conflictingNames = new Set<string>();
+  for (const snapshot of snapshots) {
+    for (const [name, team] of externalTeamMap(snapshot.data)) {
+      if (!team.id) continue;
+      const existing = externalIds.get(name);
+      if (existing && existing !== team.id) conflictingNames.add(name);
+      else externalIds.set(name, team.id);
+    }
+  }
+  const standings = rankingRows.map((row: any, index: number) => {
+    const normalizedTeamName = normalizeName(row.teamName);
+    return {
     position: Number(row.position) || index + 1,
     teamName: String(row.teamName ?? '').trim(),
+    cartolaTeamId: conflictingNames.has(normalizedTeamName) ? null : externalIds.get(normalizedTeamName) ?? null,
     badgeUrl: typeof row.badge === 'string' && row.badge ? row.badge : null,
     totalPoints: parseCartolaNumber(row.total),
     sourceSnapshot: row,
-  })).filter((row: PreviewStanding) => row.teamName).sort((a: PreviewStanding, b: PreviewStanding) => a.position - b.position);
+  }; }).filter((row: PreviewStanding) => row.teamName).sort((a: PreviewStanding, b: PreviewStanding) => a.position - b.position);
 
   const warnings: string[] = [];
   if (!ranking) warnings.push('Cache ranking_liga:ANUAL não encontrado.');
+  if (conflictingNames.size) warnings.push(`Há ${conflictingNames.size} nome(s) de equipe associado(s) a mais de um ID Cartola entre os caches; a identificação foi deixada em branco para conferência manual.`);
+  const withoutCartolaId = standings.filter(row => !row.cartolaTeamId).length;
+  if (ranking && withoutCartolaId) warnings.push(`${withoutCartolaId} equipe(s) do ranking anual ainda não puderam ser vinculadas com segurança a um ID Cartola.`);
   else if (standings.length !== 60) warnings.push(`A classificação anual contém ${standings.length} equipes; a quantidade esperada atualmente é 60, mas o total pode variar entre temporadas.`);
   if (ranking?.synced_at && Date.now() - new Date(ranking.synced_at).getTime() > 24 * 60 * 60 * 1000) {
     warnings.push('O ranking anual não é atualizado há mais de 24 horas.');
