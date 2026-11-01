@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION public.archive_season_history(p_payload jsonb)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $function$
 DECLARE
   v_archive_id uuid;
@@ -56,7 +56,7 @@ BEGIN
     WHERE jsonb_typeof(value) IS DISTINCT FROM 'object'
        OR NULLIF(trim(value->>'team_name'), '') IS NULL
        OR COALESCE(value->>'position', '') !~ '^[1-9][0-9]*$'
-       OR COALESCE(value->>'total_points', '') !~ '^-?[0-9]+(\.[0-9]+)?$'
+       OR COALESCE(value->>'total_points', '') !~ '^-?[0-9]+(\\.[0-9]+)?$'
   ) THEN
     RAISE EXCEPTION 'Há equipe com nome, posição ou pontuação inválida. Corrija a classificação antes de arquivar.';
   END IF;
@@ -95,8 +95,7 @@ BEGIN
   INSERT INTO public.season_archives
     (league, season, status, summary, archived_at, archived_by, created_by)
   VALUES
-    (v_league, v_season, 'archived',
-     p_payload->'summary', now(), auth.uid(), auth.uid())
+    (v_league, v_season, 'archived', p_payload->'summary', now(), archived_by, auth.uid(), auth.uid())
   RETURNING id INTO v_archive_id;
 
   FOR v_row IN SELECT value FROM jsonb_array_elements(v_standings)
