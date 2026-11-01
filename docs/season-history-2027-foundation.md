@@ -222,3 +222,48 @@ A consulta de leitura a `cron.job` não encontrou jobs cujo comando/nome identif
 3. A próxima sincronização inteligente da rodada 37, se executada pelo fluxo legado identificado, atualizará somente `sulamericana`. Ela não atualizará `sulamericana:2026`.
 4. Após a rodada 37, será importante comparar novamente o cache legado atualizado com o versionado antes de escolher o snapshot histórico final. Preservar ambos.
 5. Não houve alteração de banco, cache, sincronização, código funcional ou deploy nesta investigação.
+
+
+## Implementação da prévia de coleta — 01/11/2026
+
+A branch agora contém a primeira camada funcional de coleta, ainda somente leitura:
+
+- `src/lib/seasonHistoryPreview.ts`: normaliza o ranking anual, converte pontuações no formato brasileiro, relaciona equipes a IDs Cartola usando os dados externos dos caches, detecta conflitos de nomes/IDs e resolve pódios apenas quando os placares são suficientes. Empates sem decisão manual explícita permanecem pendentes.
+- A prévia preserva o payload integral do ranking, o payload integral da fonte escolhida de cada torneio e os payloads integrais das fontes alternativas. Isso é especialmente importante para a Sul-Americana, que mantém os snapshots legado e versionado para comparação.
+- `src/pages/AdminSeasonHistory.tsx`: substituiu a tela de criação de rascunho por uma prévia de coleta de 2026. A tela não grava nada no banco e não chama a API do Cartola.
+- `src/test/seasonHistoryPreview.test.ts`: cobre pontuação localizada, classificação sem limite fixo, IDs Cartola, placares agregados de ida/volta, decisão manual, empate não resolvido e preservação de fontes alternativas.
+
+### Fontes 2026 mapeadas na prévia
+
+- Ranking anual: `ranking_liga:ANUAL`.
+- Séries A/B/C: `shadow/brasileirao_serie_a/2026`, `shadow/brasileirao_serie_b/2026`, `shadow/brasileirao_serie_c/2026`.
+- Copa do Brasil: `shadow/copa_brasil/2026`, mantendo `copa:brasil` como fonte alternativa a ser comparada.
+- Libertadores: `shadow/libertadores/2026`, mantendo o cache legado `libertadores` como alternativa.
+- Sul-Americana: `sulamericana:2026`, mantendo `sulamericana` como alternativa e preservando ambos os payloads completos.
+- Champions League: `campeoes`.
+- Copa do Mundo: `copa_mundo`.
+- Intercontinental: `intercontinental`, sujeito a confirmação administrativa de que a edição foi efetivamente disputada.
+
+### Leitura somente de produção em 01/11/2026
+
+A consulta de auditoria encontrou:
+
+- `ranking_liga:ANUAL`: 60 equipes, sincronizado em 31/10/2026 13:52 UTC. É um retrato ainda provisório, não uma classificação final da temporada.
+- Séries A/B/C: 20 equipes cada; os três snapshots foram sincronizados em 31/10/2026.
+- Copa do Brasil: snapshot shadow sincronizado em 20/10/2026; precisa de atualização após os jogos finais.
+- Libertadores: snapshot shadow sincronizado em 27/10/2026.
+- Sul-Americana: versão legada sincronizada em 27/10 e versionada em 29/10; ambos permanecem preservados.
+- Champions League e Copa do Mundo: caches de 24/08/2026; exigem conferência de atualidade antes do arquivo definitivo.
+- Intercontinental: cache de 24/03/2026; não presumir que a competição foi disputada apenas porque existe um cache.
+
+Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas na fase Final, mas a existência dos confrontos não significa que seus placares finais estejam preenchidos. A prévia não deve promover esses torneios a completos sem placares decisivos e, quando houver disputa de terceiro lugar, sem o resultado dessa partida.
+
+### Estado de segurança desta etapa
+
+- Nenhuma migration aplicada.
+- Nenhuma tabela de histórico criada em produção.
+- Nenhum rascunho criado.
+- Nenhum cache operacional alterado.
+- Nenhuma chamada à API do Cartola executada.
+- Nenhum deploy de produção realizado.
+- A prévia é exclusivamente de leitura e não habilita arquivamento.
