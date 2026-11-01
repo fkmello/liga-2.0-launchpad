@@ -122,7 +122,7 @@ const AdminSeasonHistory = () => {
       'Os vínculos com perfis serão deixados em branco quando não houver identidade histórica comprovada.',
       '',
       'Deseja continuar?',
-    ].join('\\n');
+    ].join('\n');
     if (!window.confirm(message)) return;
 
     const typedConfirmation = window.prompt(
