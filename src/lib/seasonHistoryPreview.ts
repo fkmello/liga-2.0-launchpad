@@ -173,10 +173,12 @@ function tournamentPreview(
   const alternates = candidates.slice(1).map(row => ({ cacheKey: row.cache_key, syncedAt: row.synced_at }));
   const alternateSnapshots = candidates.slice(1).map(row => ({ cacheKey: row.cache_key, syncedAt: row.synced_at, data: row.data }));
   if (!selected) {
+    const missingWarnings = ['Nenhum cache disponível para esta competição.'];
+    if (setting && !setting.enabled && !setting.finished) missingWarnings.push('O torneio está desabilitado e não marcado como finalizado na configuração atual; confirmar se a edição 2026 foi efetivamente disputada antes de arquivar ou marcar como não disputada.');
     return {
       slug: config.slug, name: config.name, sourceCacheKey: null, sourceSyncedAt: null,
       sourceProvider: null, sourceFormat: null, status: 'not_found', enabled: setting?.enabled ?? null, finished: setting?.finished ?? null, kind: config.kind, standingsCount: 0, podium: [], finalMatches: [],
-      sourceSnapshot: null, alternateSources: [], alternateSnapshots: [], warnings: ['Nenhum cache disponível para esta competição.'],
+      sourceSnapshot: null, alternateSources: [], alternateSnapshots: [], warnings: missingWarnings,
     };
   }
 
