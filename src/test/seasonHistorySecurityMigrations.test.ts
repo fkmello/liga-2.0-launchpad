@@ -30,6 +30,11 @@ describe('season history database security migrations', () => {
     }
   });
 
+  it('wraps RLS authorization helpers in scalar SELECTs to avoid per-row re-evaluation', () => {
+    expect(foundation).toContain('(select public.is_admin((select auth.uid())))');
+    expect(foundation).toContain('actor_id = (select auth.uid())');
+  });
+
   it('does not grant authenticated users direct insert, update, or delete access', () => {
     expect(foundation).not.toMatch(/GRANT\s+[^;]*(INSERT|UPDATE|DELETE|ALL)[^;]*TO\s+authenticated/i);
   });
