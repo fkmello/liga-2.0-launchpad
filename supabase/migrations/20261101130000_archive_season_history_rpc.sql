@@ -52,7 +52,7 @@ BEGIN
   END IF;
 
   IF (SELECT count(*) FROM jsonb_array_elements(v_standings))
-     <> (SELECT count(DISTINCT (s->>'position')::integer) FROM jsonb_array_elements(v_standings) AS item(value)) THEN
+     <> (SELECT count(DISTINCT (value->>'position')::integer) FROM jsonb_array_elements(v_standings) AS item(value)) THEN
     RAISE EXCEPTION 'Existem posições duplicadas na classificação.';
   END IF;
 
