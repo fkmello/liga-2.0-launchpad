@@ -31,7 +31,7 @@ describe('season history database security migrations', () => {
   });
 
   it('does not grant authenticated users direct insert, update, or delete access', () => {
-    expect(foundation).not.toMatch(/GRANT\\s+[^;]*(INSERT|UPDATE|DELETE|ALL)[^;]*TO\\s+authenticated/i);
+    expect(foundation).not.toMatch(/GRANT\s+[^;]*(INSERT|UPDATE|DELETE|ALL)[^;]*TO\s+authenticated/i);
   });
 
   it('restricts archive publication to authenticated admins through a security-definer RPC', () => {
