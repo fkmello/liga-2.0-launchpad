@@ -95,7 +95,7 @@ BEGIN
   INSERT INTO public.season_archives
     (league, season, status, summary, archived_at, archived_by, created_by)
   VALUES
-    (v_league, v_season, 'archived', p_payload->'summary', now(), archived_by, auth.uid(), auth.uid())
+    (v_league, v_season, 'archived', p_payload->'summary', now(), auth.uid(), auth.uid())
   RETURNING id INTO v_archive_id;
 
   FOR v_row IN SELECT value FROM jsonb_array_elements(v_standings)
