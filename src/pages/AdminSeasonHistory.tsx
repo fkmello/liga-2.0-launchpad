@@ -22,8 +22,8 @@ const AdminSeasonHistory = () => {
 
   const generatePreview = useCallback(async () => {
     const parsedSeason = Number(season);
-    if (!Number.isInteger(parsedSeason) || parsedSeason < 2000 || parsedSeason > 2200) {
-      toast.error('Informe uma temporada válida.');
+    if (!Number.isInteger(parsedSeason) || parsedSeason !== 2026) {
+      toast.error('Esta primeira etapa de coleta está preparada exclusivamente para a temporada 2026.');
       return;
     }
 
@@ -132,7 +132,7 @@ const AdminSeasonHistory = () => {
                             <td className="p-2">
                               <div className="flex items-center gap-2">
                                 {row.badgeUrl ? <img src={row.badgeUrl} alt="" className="h-6 w-6 object-contain" /> : <span className="h-6 w-6 rounded-full bg-muted" />}
-                                <span>{row.teamName}</span>
+                                <span>{row.teamName}<span className="block text-[10px] text-muted-foreground">ID Cartola: {row.cartolaTeamId ?? 'não identificado'}</span></span>
                               </div>
                             </td>
                             <td className="p-2 text-right tabular-nums">{row.totalPoints?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '—'}</td>
