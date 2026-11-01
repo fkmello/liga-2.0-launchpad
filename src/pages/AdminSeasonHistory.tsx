@@ -21,6 +21,7 @@ const AdminSeasonHistory = () => {
   const [preview, setPreview] = useState<SeasonHistoryPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const unresolvedKnockouts = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status !== 'complete') ?? [];
 
   const generatePreview = useCallback(async () => {
     const parsedSeason = Number(season);
@@ -58,6 +59,10 @@ const AdminSeasonHistory = () => {
 
   const archivePreview = useCallback(async () => {
     if (!preview) return;
+    if (unresolvedKnockouts.length > 0) {
+      toast.error('Ainda existem torneios eliminatórios sem pódio confirmado. Resolva-os ou registre formalmente que não foram disputados antes de arquivar.');
+      return;
+    }
     if (preview.standings.length === 0 || preview.standings.some(row => row.totalPoints === null)) {
       toast.error('A classificação precisa ter equipes e pontuações válidas antes do arquivamento.');
       return;
@@ -148,7 +153,7 @@ const AdminSeasonHistory = () => {
     }
     toast.success('Histórico arquivado permanentemente. ID: ' + String(data));
     setPreview(null);
-  }, [preview]);
+  }, [preview, unresolvedKnockouts.length]);
 
   const completeTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'complete').length ?? 0;
   const pendingTournaments = preview?.tournaments.filter(item => item.kind === 'knockout' && item.status === 'pending').length ?? 0;
@@ -315,6 +320,16 @@ const AdminSeasonHistory = () => {
               ))}
             </section>
 
+            {unresolvedKnockouts.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  O arquivamento está bloqueado: {unresolvedKnockouts.length} torneio(s) eliminatório(s) ainda não têm pódio confirmado
+                  ({unresolvedKnockouts.map(item => item.name).join(', ')}). Antes de fechar a temporada, será necessário atualizar os resultados
+                  ou registrar explicitamente que uma edição não foi disputada.
+                </AlertDescription>
+              </Alert>
+            )}
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -323,7 +338,7 @@ const AdminSeasonHistory = () => {
                 Nenhum perfil será associado automaticamente. A confirmação é permanente e protegida contra duplicidade.
               </AlertDescription>
             </Alert>
-            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || preview.standings.length === 0}>
+            <Button className="w-full" variant="destructive" onClick={() => void archivePreview()} disabled={archiving || loading || preview.standings.length === 0 || unresolvedKnockouts.length > 0}>
               {archiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
               {archiving ? 'Arquivando temporada...' : 'Confirmar arquivamento permanente'}
             </Button>
