@@ -31,10 +31,10 @@ BEGIN
   IF v_season IS NULL OR v_season < 2000 OR v_season > 2200 THEN
     RAISE EXCEPTION 'Temporada inválida.';
   END IF;
-  IF jsonb_typeof(v_standings) <> 'array' OR jsonb_array_length(v_standings) = 0 THEN
+  IF jsonb_typeof(v_standings) IS DISTINCT FROM 'array' OR jsonb_array_length(v_standings) = 0 THEN
     RAISE EXCEPTION 'A classificação anual está vazia; arquivamento cancelado.';
   END IF;
-  IF jsonb_typeof(v_competitions) <> 'array' THEN
+  IF jsonb_typeof(v_competitions) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'A lista de torneios está inválida.';
   END IF;
 
