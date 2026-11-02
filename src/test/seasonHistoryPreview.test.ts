@@ -97,6 +97,15 @@ describe('competition knockout formats', () => {
     },
   );
 
+  it('keeps a knockout tournament pending when the third-place match is missing', () => {
+    const preview = buildSeasonHistoryPreview(2026, [makeSnapshot('campeoes', [
+      { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', score1: '2', score2: '1' },
+    ])]);
+    const tournament = preview.tournaments.find(item => item.slug === 'champions-league')!;
+    expect(tournament.status).toBe('pending');
+    expect(tournament.podium.map(item => item.position)).toEqual([1, 2]);
+  });
+
   it('does not treat an unidentified single match as the final', () => {
     const preview = buildSeasonHistoryPreview(2026, [makeSnapshot('copa_mundo', [
       { tipo: 'semifinal', team1: 'Equipe A', team2: 'Equipe B', score1: '3', score2: '1' },
