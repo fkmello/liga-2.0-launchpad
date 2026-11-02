@@ -63,7 +63,7 @@ describe('season history preview collector', () => {
       type: 'campeoes',
       synced_at: null,
       data: { fases: { Final: { matches: [
-        { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', scoreIda1: '70,00', scoreIda2: '60,00' },
+        { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B', score1: '70,00', score2: '70,00' },
       ] } } },
     }]);
     const champions = preview.tournaments.find(item => item.slug === 'champions-league')!;
