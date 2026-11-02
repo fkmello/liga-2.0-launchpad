@@ -106,6 +106,28 @@ describe('competition knockout formats', () => {
     expect(tournament.podium.map(item => item.position)).toEqual([1, 2]);
   });
 
+  it('warns when an earlier two-legged knockout phase has unresolved results', () => {
+    const preview = buildSeasonHistoryPreview(2026, [{
+      cache_key: 'shadow/libertadores/2026',
+      type: 'knockout',
+      synced_at: '2026-11-01T12:00:00Z',
+      data: { fases: {
+        'Oitavas de Final': { matches: [] },
+        'Quartas de Final': { matches: [] },
+        Semifinal: { matches: [
+          { team1: 'Equipe A', team2: 'Equipe B', scoreIda1: '80,00', scoreIda2: '70,00', scoreVolta1: '', scoreVolta2: '' },
+        ] },
+        Final: { matches: [
+          { tipo: 'final', team1: 'Equipe A', team2: 'Equipe B' },
+          { tipo: 'terceiro_lugar', team1: 'Equipe C', team2: 'Equipe D' },
+        ] },
+      } },
+    }]);
+    const tournament = preview.tournaments.find(item => item.slug === 'libertadores')!;
+    expect(tournament.status).toBe('pending');
+    expect(tournament.warnings).toContain('Semifinal: 1 de 1 confronto(s) ainda sem resultado decisivo completo.');
+  });
+
   it('does not treat an unidentified single match as the final', () => {
     const preview = buildSeasonHistoryPreview(2026, [makeSnapshot('copa_mundo', [
       { tipo: 'semifinal', team1: 'Equipe A', team2: 'Equipe B', score1: '3', score2: '1' },
