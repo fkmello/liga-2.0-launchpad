@@ -117,8 +117,10 @@ function findFinalMatches(data: Record<string, any>): Record<string, any>[] {
 
 function getMatchType(match: Record<string, any>): 'final' | 'third' | null {
   const type = normalizeName(match.tipo ?? match.matchNumber ?? match.match_number ?? '');
-  if (type === 'final' || type.includes('final') && !type.includes('terceiro')) return 'final';
   if (type.includes('terceiro') || type.includes('3 lugar') || type.includes('3º')) return 'third';
+  // "semifinal" e "quartas de final" contêm a palavra "final",
+  // mas não representam a decisão do campeonato.
+  if (type === 'final' || type === 'grande final' || type === 'finalissima') return 'final';
   return null;
 }
 
