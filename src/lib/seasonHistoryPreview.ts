@@ -240,7 +240,7 @@ function tournamentPreview(
     sourceSyncedAt: selected.synced_at,
     sourceProvider: selected.data?.metadata?.provider ?? null,
     sourceFormat: selected.data?.metadata?.source_type ?? selected.type ?? null,
-    status: config.kind === 'standings' ? (standingsCount > 0 ? 'complete' : 'pending') : (result.podium.length >= 2 && (!result.hasThirdMatch || !result.thirdMissing) ? 'complete' : 'pending'),
+    status: config.kind === 'standings' ? (standingsCount > 0 ? 'complete' : 'pending') : (result.podium.length === 3 && result.hasThirdMatch && !result.thirdMissing ? 'complete' : 'pending'),
     enabled: setting?.enabled ?? null,
     finished: setting?.finished ?? null,
     kind: config.kind,
