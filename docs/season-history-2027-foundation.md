@@ -305,3 +305,42 @@ Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas 
 - A tela não consulta `sheets_cache`, Cartola API nem endpoints de sincronização.
 - Como as migrations ainda não foram aplicadas, a tela exibirá estado vazio até existir um arquivo publicado.
 - A rota e as consultas continuam protegidas pelo RLS das tabelas históricas; somente usuários autenticados podem ler arquivos publicados.
+
+
+## Revisão final da fundação — 02/11/2026
+
+### Formatos de mata-mata registrados
+- Copa do Brasil: primeira e segunda fases, oitavas, quartas e semifinal em ida e volta; final e terceiro lugar em jogo único.
+- Libertadores e Sul-Americana: oitavas, quartas e semifinal em ida e volta; final e terceiro lugar em jogo único.
+- Champions League: playoffs, oitavas, quartas e semifinal em ida e volta; final e terceiro lugar em jogo único.
+- Copa do Mundo: 16 avos, oitavas, quartas, semifinal, final e terceiro lugar em jogo único.
+- Intercontinental: quartas, semifinal, final e terceiro lugar em jogo único. A edição 2026 está sem equipes/confrontos e depende de decisão administrativa sobre sua realização; não classificar como disputada ou não disputada antes dessa decisão.
+
+### Validação das fases
+A prévia administrativa valida agora também as fases anteriores à final, respeitando o formato configurado para cada competição. Confrontos incompletos geram alertas por fase e quantidade, sem inferir vencedores. Fases com valor nulo são toleradas como etapas ainda não alimentadas, como ocorre atualmente na Intercontinental antes da classificação dos participantes.
+
+### Auditoria dos caches em 02/11/2026
+- Champions League: Final (2), Playoffs (8), Oitavas (8), Quartas (4) e Semifinal (2); todos os confrontos das fases anteriores possuem equipes e placares de ida/volta preenchidos. A final e o terceiro lugar têm placares de jogo único.
+- Copa do Mundo: 16 avos (16), Oitavas (8), Quartas (4), Semifinal (2) e Final (2); os campos de placar único estão preenchidos nos confrontos retornados pela auditoria.
+- Copa do Brasil: 1ª Fase (28) e 2ª Fase (16) com placares de ida/volta; oitavas (8) e quartas (4) também preenchidas; semifinal (2) ainda sem placares; final (2) sem equipes/placares no cache legado consultado.
+- Libertadores: oitavas (8) e quartas (4) com ida/volta preenchidas; semifinal (2) ainda sem placares; final (2) sem equipes/placares no cache shadow consultado.
+- Sul-Americana: oitavas (8), quartas (4) e semifinal (2) com ida/volta preenchidas; final (2) sem placares no cache versionado consultado. O cache legado permanece preservado como fonte alternativa.
+- Intercontinental: fases quartas, semifinal e final existem no objeto JSON, mas os valores são nulos, consistente com a ausência atual de participantes.
+
+A auditoria acima é uma fotografia dos caches disponíveis no momento; os dados devem ser atualizados e revisados novamente quando a temporada e cada competição forem encerradas.
+
+### CI e Preview
+- Commit da validação de fases anteriores: `900063591ae17086d2c791d40557cc6deff90e4d`.
+- GitHub Actions #41370855245: jobs `test` e `postgres-integration` concluídos com sucesso; testes unitários e build frontend passaram.
+- Vercel Preview: deployment concluído/Ready para o commit, disponível em https://liga-2-0-launchpad-6wrb-git-feature-season-histo-01622f-fkmello.vercel.app.
+- A integração automatizada usa PostgreSQL 16 com estrutura de Auth/roles compatível simulada; ainda não equivale a um teste E2E com Supabase Auth e PostgREST reais.
+
+### Limite entre fundação técnica e encerramento de temporada
+A fundação técnica do histórico está implementada e validada no Preview. Isso não significa que a temporada 2026 esteja pronta para arquivamento. O arquivamento real continuará bloqueado até:
+1. encerramento oficial da temporada e atualização do ranking anual final;
+2. atualização e revisão dos caches das competições;
+3. decisão explícita sobre a realização da Intercontinental;
+4. resolução dos pódios ou marcação administrativa justificada dos torneios não disputados;
+5. confirmação administrativa explícita no fluxo de arquivamento.
+
+Nenhuma migration foi aplicada em produção, nenhum arquivo histórico foi gravado e nenhum deploy de produção foi realizado. O PR permanece Draft aguardando decisão explícita de promoção para revisão/merge.
