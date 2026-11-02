@@ -596,6 +596,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      archive_season_history: { Args: { p_payload: Json }; Returns: string }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       redeem_invite_code: {

@@ -1,0 +1,346 @@
+# Histórico de Temporadas — Fundação para 2027
+
+## Objetivo
+Preservar a história da Liga Jacarandás entre temporadas, permitindo consultar campeões, pódios, classificação final completa e pontuação de cada participante, sem depender da disponibilidade futura da API do Cartola.
+
+## Restrição operacional da API
+A API do Cartola deve ser considerada indisponível após o encerramento da temporada e até a janela de reabertura do ano seguinte.
+1. Toda captura que dependa da API deve ser feita e validada enquanto a temporada 2026 ainda estiver acessível.
+2. O arquivo histórico deve ser autossuficiente: a interface de consulta nunca deve chamar a API do Cartola.
+3. No hiato, testes devem usar fixtures/cópias de snapshots reais já armazenados, sem chamadas externas.
+4. Não assumir que a API manterá dados consultáveis depois da rodada 38.
+
+## Modelo de dados proposto
+Criar uma camada própria de arquivo histórico, separada das tabelas operacionais da temporada corrente.
+
+### season_archives
+Um registro por liga e temporada: id UUID; league; season; status (draft/archived); archived_at; archived_by; summary JSONB. Restrição única em (league, season).
+
+### season_archive_standings
+Snapshot da classificação final: archive_id; position; profile_id opcional; team_name; badge_url; total_points; source_snapshot JSONB. Restrição única em (archive_id, position).
+
+### season_archive_competitions
+Um registro por torneio arquivado: archive_id; tournament_slug; tournament_name; champion_name e escudo; runner_up_name e escudo; third_place_name e escudo; final_score JSONB; source_snapshot JSONB com fases/classificação/resultados completos; status (pending/complete/not_played). Restrição única em (archive_id, tournament_slug).
+
+Os snapshots JSONB preservam detalhes da temporada, enquanto os campos normalizados facilitam a Galeria dos Campeões e rankings históricos. A modelagem final deve ser validada contra o formato real de cada competição antes da migration.
+
+## Fluxo administrativo proposto
+1. O administrador escolhe a temporada e revisa os dados capturados.
+2. O sistema valida se a classificação final e os torneios selecionados têm resultados suficientes.
+3. O administrador confirma o arquivamento.
+4. O sistema grava snapshots da classificação e das competições.
+5. A consulta pública lê exclusivamente as tabelas de arquivo.
+6. Correções posteriores devem ser feitas por ação administrativa auditável, não por sincronização automática.
+O arquivamento não deve ser executado automaticamente apenas porque a rodada 38 terminou. Deve exigir revisão e confirmação do administrador.
+
+## Plano por janela de disponibilidade
+### Enquanto a API 2026 estiver disponível
+- Mapear consultas necessárias para fechar a temporada.
+- Capturar e validar classificação anual final, turnos e classificações relevantes.
+- Capturar fases, resultados, pódios e identificadores/escudos dos torneios.
+- Guardar cópias de payloads reais para fixtures de testes.
+- Confirmar como os dados externos se relacionam com perfis/participantes da liga.
+
+### Durante o hiato sem API
+- Criar migrations, tabelas, índices, RLS e políticas de leitura/admin.
+- Implementar o serviço de arquivamento baseado exclusivamente nos snapshots locais.
+- Implementar a Galeria dos Campeões e a consulta de classificação completa.
+- Testar com fixtures reais de 2026, sem chamadas à API.
+- Preparar a nova temporada sem alterar nem sobrescrever o arquivo de 2026.
+
+### Quando a API 2027 reabrir
+- Fazer smoke tests de leitura.
+- Confirmar compatibilidade do formato e eventuais mudanças da API.
+- Validar captura da nova temporada antes de habilitar o fluxo operacional.
+
+## Cuidados de segurança e integridade
+- Não sobrescrever cache ou dados de 2026 ao iniciar 2027.
+- Não inferir campeões a partir de dados incompletos.
+- Tratar empates/decisões manuais como dados explícitos.
+- Habilitar RLS em todas as tabelas expostas.
+- Leitura do histórico conforme a regra de acesso da liga; escrita/arquivamento somente para administradores.
+- Nunca expor service-role no frontend.
+- Manter snapshots com origem e timestamp para auditoria.
+
+## Estado inicial
+Este documento é a fundação de planejamento. Nenhuma tabela foi criada, nenhum dado foi arquivado e nenhuma sincronização ou deploy foi alterado por esta etapa.
+
+## Auditoria inicial dos dados existentes — 31/10/2026
+
+Esta auditoria foi feita por leitura do código e dos registros atuais de `public.sheets_cache` e `public.tournament_settings`. Ela não executou chamadas à API do Cartola, não alterou o banco e não arquivou dados.
+
+### Torneios configurados atualmente
+
+Os slugs presentes em `src/config/leagueSlugs.ts` e/ou `tournament_settings` mostram que a configuração precisa ser dinâmica. Em 31/10/2026, os registros de configuração são:
+
+- `brasileirao-serie-a`, `brasileirao-serie-b`, `brasileirao-serie-c`: habilitados.
+- `copa-do-brasil`, `libertadores`, `sulamericana`: habilitados.
+- `champions-league`, `copa-do-mundo`: habilitados e marcados como finalizados.
+- `copa-intercontinental`: desabilitado.
+
+A lista acima é apenas um retrato da configuração atual, não uma lista fixa para o modelo histórico. Cada temporada deve registrar somente os torneios que efetivamente existiram/foram disputados nela.
+
+### Fontes e formatos já identificados
+
+- Ranking da liga: `ranking_liga:ANUAL`, `ranking_liga:1º TURNO` e `ranking_liga:2º TURNO` possuem 60 entradas cada no momento da auditoria. Há também caches mensais. Esses dados são atualizáveis e ainda não representam necessariamente a classificação final da temporada.
+- Séries A/B/C: existem snapshots `shadow/brasileirao_serie_a/2026`, `shadow/brasileirao_serie_b/2026` e `shadow/brasileirao_serie_c/2026`, cada um com fases por rodada (1 a 38), classificação e dados externos.
+- Copa do Brasil: `shadow/copa_brasil/2026`, com fases, classificação e dados externos. O cache estava sincronizado em 20/10/2026; precisa ser atualizado/validado antes de servir como fonte final.
+- Libertadores: `shadow/libertadores/2026`, com fase de grupos, mata-mata, classificação e dados externos.
+- Sul-Americana: `sulamericana:2026`, com fase de grupos, mata-mata, classificação e dados externos. Também existe cache legado `sulamericana`; a seleção da fonte canônica precisa ser definida para o arquivamento.
+- Champions League: cache `campeoes`, com fases, classificação e dados externos.
+- Copa do Mundo: cache `copa_mundo`, com fases, classificação e dados externos.
+- Intercontinental: cache legado `intercontinental`, com fases; o torneio está desabilitado na configuração atual. É necessário verificar se houve disputa efetiva em 2026 antes de marcar como não disputado ou arquivável.
+
+### Pontos que exigem captura/validação antes do fim da janela da API
+
+1. Guardar snapshots imutáveis do ranking anual e dos dois turnos quando cada período fechar; o cache atual de 60 posições pode ser sobrescrito.
+2. Confirmar se os caches de Séries A/B/C incluem classificação final completa e pontos totais, e não apenas resultados por rodada.
+3. Verificar para cada torneio se todas as fases, placares, vencedores manuais e pódio estão presentes no snapshot mais recente.
+4. Resolver qual cache é a fonte oficial quando existem variantes legadas e versionadas (especialmente Sul-Americana, Libertadores e Copa do Brasil).
+5. Preservar identificadores Cartola, nomes e escudos em snapshots; não depender de consultas futuras para reconstruí-los.
+6. Definir o vínculo histórico com os participantes: `profiles` representa usuários atuais e pode mudar, enquanto `user_teams` mantém `id_cartola`, nome, série e liga. O arquivo precisa conservar também uma identidade textual estável no próprio snapshot, sem depender exclusivamente de uma FK para perfil.
+7. Capturar os resultados da temporada e validar cobertura/consistência usando dados existentes, antes de desenhar a rotina de arquivamento.
+
+### Observações de implementação
+
+- `sheets_cache` usa a coluna `cache_key` e o JSONB `data`; é cache operacional, não arquivo permanente.
+- `tournament_settings` registra habilitação e finalização, mas não deve ser a fonte histórica exclusiva: configurações podem mudar entre temporadas.
+- `src/hooks/useGoogleSheets.ts` confirma contratos diferentes para ranking, classificação, confrontos, fases de grupos e mata-mata. A camada histórica deve preservar o snapshot bruto original e extrair campos normalizados quando possível.
+- Nenhuma migration, tabela, policy RLS, chamada à API ou alteração de produção foi realizada nesta auditoria.
+
+
+## Regras de escopo confirmadas pelo administrador — 31/10/2026
+
+### Ranking da liga
+- O histórico permanente deve guardar a classificação anual completa de todos os participantes, não apenas o top 10.
+- Primeiro turno, segundo turno e rankings mensais continuam sendo exibidos durante a temporada corrente para acompanhamento e premiação, mas ficam fora do arquivo histórico permanente por enquanto.
+- O número de participantes não deve ser fixado em 60: o arquivo deve aceitar o total de equipes existente em cada temporada.
+
+### Champions League e Copa do Mundo
+- A Champions League de 2026 foi um torneio separado, alimentado por API própria e jogadores da competição europeia.
+- Para 2027, o administrador considera reaproveitar a estrutura/experiência da Champions, mas como um torneio adicional dentro da liga principal, usando a API do Brasileirão. Isso ainda é uma decisão futura, não deve ser presumido nem habilitado agora.
+- O histórico deve permitir que o torneio seja exibido sob o mesmo nome ao longo dos anos, preservando em cada temporada a origem da API e o formato/fonte dos dados. Assim, não se confunde a edição independente de 2026 com uma possível edição integrada a partir de 2027.
+- A Copa do Mundo de 2026 foi uma competição separada, com API própria, e tem periodicidade de quatro anos. A continuidade depende de eventual disponibilização futura da API pela Globo. Não criar temporadas futuras fictícias; preservar a edição de 2026 e só adicionar outra quando efetivamente existir.
+
+### Política de catálogo histórico
+O catálogo não deve ser uma lista fixa de torneios codificada para sempre. Cada arquivo de temporada registra os torneios efetivamente disputados naquela temporada, com identificador estável, nome apresentado, origem da API, formato e status. Um torneio novo começa seu histórico na primeira temporada em que for disputado; um torneio encerrado mantém os arquivos anteriores.
+
+
+## Investigação da Sul-Americana: cache legado x cache versionado — 31/10/2026
+
+Inspeção estática do código na branch `main` (sem chamadas à API, sem alterações no banco e sem deploy) esclareceu o fluxo atualmente implementado:
+
+### Quem lê o cache legado `sulamericana`
+- `src/hooks/useGoogleSheets.ts`: os quatro hooks usados pela tela — `useConfrontosSulamericanaGrupos`, `useDadosExternosSulamericana`, `useClassificacaoSulamericana` e `useConfrontosSulamericana` — chamam `fetchWithFallback('sulamericana', ...)`.
+- `src/components/tournaments/SulamericanaView.tsx`: usa diretamente esses quatro hooks. Portanto, a interface atual da Sul-Americana está ligada ao cache legado.
+- `src/lib/sheetsCache.ts`: `fetchWithFallback` consulta primeiro a chave indicada em `sheets_cache`; só chama a Edge Function antiga `google-sheets` se não encontrar cache.
+- `supabase/functions/sync-sheets/index.ts`: `syncLibertadoresOrSulamericana(..., 'sulamericana', ...)` grava a chave `sulamericana`, tipo `copa`. Os escopos `smart`, `tournament`, `all` e `sulamericana_dados_externos` desse fluxo também apontam para esse escritor legado.
+
+### O que o fluxo versionado/consolidado faz — e o que não faz
+- `supabase/functions/sync-tournament-api/index.ts` resolve torneios exclusivamente pelo registry `supabase/functions/_shared/tournament/registry.ts`.
+- O registry atual contém Copa do Brasil, Brasileirão A/B/C, Libertadores e Copa do Mundo; **não contém `sulamericana`**.
+- O dispatcher de cron percorre `listTournaments()`; consequentemente, a Sul-Americana não é sincronizada por esse dispatcher/registry.
+- O código consolidado da interface (`useTournamentPayload`) só está habilitado para Série A/B/C pelas feature flags; não existe caminho consolidado habilitado para a tela da Sul-Americana.
+- A configuração de chaves `src/config/tournamentCacheKeys.ts` não registra uma migração especial da Sul-Americana. A existência do registro `sulamericana:2026` no banco, por si só, não o torna fonte ativa do app.
+
+### Conclusão operacional
+O cache `sulamericana` é a fonte ativa da tela e continua sendo atualizado pelo fluxo antigo de sincronização. O cache `sulamericana:2026` é um registro versionado paralelo, mas não foi encontrado consumidor no frontend nem produtor no registry/cron atual. Assim, a hipótese mais provável é que ele tenha sido criado por uma etapa experimental/manual ou por um fluxo anterior não presente na branch inspecionada; a origem exata da gravação ainda não está comprovada.
+
+**Não consolidar nem apagar nenhum dos dois registros neste momento.** Antes de qualquer mudança, é necessário verificar o histórico de criação/atualização do registro versionado (se houver logs/auditoria disponíveis) e confirmar se existe algum consumidor externo ao código rastreado. Para o projeto de histórico, a captura de 2026 deve ler e comparar ambos os snapshots, registrar a origem de cada um e escolher explicitamente o payload completo/validado — sem assumir que a chave versionada é a canônica apenas pelo nome.
+
+A inspeção foi somente leitura. Nenhum cache, código funcional, migration, configuração, sincronização ou deploy foi alterado.
+
+
+### Comparação direta dos dois registros no Supabase — 31/10/2026
+
+Consulta somente leitura aos dois registros de `public.sheets_cache`:
+
+| Propriedade | `sulamericana` (legado) | `sulamericana:2026` (versionado) |
+|---|---|---|
+| `type` | `copa` | `sulamericana` |
+| Último `synced_at` | 27/10/2026 11:18:40 UTC | 29/10/2026 19:29:41 UTC |
+| Versão/metadata | ausentes | `version=1`, metadata com temporada 2026, provider `cartola_brasileirao`, `source_type=api`, schema_version 1 e hash |
+| Rodadas de grupos | `grupos.rodada_1..6` | `fases["Fase de Grupos"].rodada_1..6` |
+| Classificação | `classificacao.groups` | `classificacao.grupos` |
+| Dados externos | 32 linhas | 32 linhas |
+| Mata-mata | Oitavas (8), Quartas (4), Semifinal (2), Final (2) | mesmas fases e quantidades |
+
+Comparações estruturais/JSON:
+- As seis rodadas de confrontos da fase de grupos são idênticas entre os dois registros.
+- Os dados das quatro fases de mata-mata são idênticos.
+- Os dados externos **não são idênticos**, apesar de ambos terem 32 linhas. Não se deve substituir um pelo outro sem identificar as diferenças e validar os IDs/escudos.
+- A classificação também não é idêntica em representação: o legado usa a chave `groups`, enquanto o versionado usa `grupos`. A comparação direta desses campos retornou diferença; é necessário normalizar os dois formatos e comparar nomes, equipes, posições e estatísticas antes de escolher o snapshot.
+- O registro versionado contém a classificação em sete grupos, com quatro linhas cada. O registro legado também possui classificação, mas em estrutura distinta.
+
+### O que se sabe sobre a origem do cache versionado
+
+O registro versionado tem metadados de geração próprios (hash SHA-256, `generated_at`, provider e source_type), foi sincronizado quase 32 horas depois do legado e foi gravado pelo mesmo UUID de administrador indicado em `synced_by`. Isso comprova que ele passou por um fluxo de geração versionado, mas **não identifica por si só qual função/commit originou a gravação**. A inspeção da branch atual não encontrou produtor da Sul-Americana no registry novo. A origem exata permanece não comprovada; não atribuir a criação a um fluxo específico sem logs ou histórico de auditoria.
+
+### Decisão de segurança para o arquivo histórico
+
+Não escolher ainda um cache como substituto integral do outro. Para o snapshot histórico de 2026, o processo deverá:
+1. preservar os dois payloads brutos com sua chave, tipo, timestamps e metadados de origem;
+2. comparar/normalizar classificação e dados externos, resolvendo divergências de equipes, IDs e escudos;
+3. usar os confrontos de grupos e mata-mata, já confirmados idênticos nesta leitura, sem descartar o payload bruto de nenhuma fonte;
+4. registrar explicitamente a fonte escolhida para cada conjunto de dados e eventuais correções manuais.
+
+A comparação foi somente leitura. Nenhum cache, tabela, código funcional, migration, sincronização ou deploy foi alterado.
+
+
+### Comparação detalhada dos dados externos e classificação — 31/10/2026
+
+Nova comparação linha a linha, somente leitura, entre os arrays `dados_externos.rows` dos dois caches:
+
+- Os dois registros têm 32 linhas e a mesma sequência de nomes e IDs Cartola.
+- Não foi encontrada diferença de nome nem de ID entre as linhas correspondentes.
+- Exatamente dois registros diferem apenas na URL do escudo:
+  - `ferre-ira fc`, ID `28826806`: URL diferente entre os caches.
+  - `Guiguiba 06`, ID `25248276`: URL diferente entre os caches.
+- Isso confirma a hipótese do administrador de que a divergência está nos escudos. Entretanto, a inspeção dos snapshots, sem consultar a API, não permite afirmar qual imagem é visualmente mais atual/correta. O versionado não é automaticamente mais novo em todos os escudos: as URLs distintas carregam identificadores/datas internas diferentes, mas isso não basta para provar qual representa a imagem vigente.
+- Foi observado também que `Time 1` e `Time 3` aparecem com o mesmo ID Cartola `51007036` e a mesma URL de escudo nos dois caches. É uma possível duplicidade já presente nas duas fontes, não uma divergência entre elas; precisa ser conferida antes de usar nome como chave de identidade.
+
+A classificação foi normalizada comparando grupo e posição, apesar dos formatos diferentes (`groups[].name/rows` no legado e `grupos[GRUPO]` no versionado). **As sete tabelas de grupo, com quatro posições cada, são idênticas linha a linha**: nomes, posição, pontos, partidas e demais valores disponíveis coincidem. Portanto, a divergência de classificação observada na comparação estrutural anterior era de representação/estrutura, não de conteúdo.
+
+### Próxima sincronização da Sul-Americana: destino confirmado no código
+
+A análise do fluxo de sincronização esclareceu o que acontecerá quando o processo legado executar a sincronização inteligente da rodada 37:
+
+- Em `supabase/functions/sync-sheets/index.ts`, a constante `LIBERTA_SULA_RODADAS` inclui explicitamente a rodada `37`.
+- Quando o endpoint legado é chamado com `scope=smart&rodada=37`, ele executa `syncLibertadoresOrSulamericana(..., "sulamericana", ...)`.
+- Essa função grava com `upsertCache` na chave **`sulamericana`**, tipo `copa`. Ela não grava na chave `sulamericana:2026`.
+- A sincronização inteligente refaz o payload legado completo de grupos, classificação, fases e dados externos; portanto, se esse for o caminho efetivamente acionado na rodada 37, o cache legado será atualizado com os dados disponíveis na planilha naquele momento.
+- O cache versionado `sulamericana:2026` **não será atualizado por esse fluxo**.
+
+Há um segundo fluxo, mais novo, em `tournament-cron-dispatcher` + `sync-tournament-api`, mas ele percorre apenas os torneios registrados em `registry.ts`. A Sul-Americana não está nesse registry, logo esse dispatcher também não a sincroniza nem atualiza o cache versionado.
+
+A consulta de leitura a `cron.job` não encontrou jobs cujo comando/nome identificasse diretamente `sync-sheets`/sincronização. Assim, o código comprova o destino caso o smart sync da rodada 37 seja chamado, mas não comprova por si só qual agendador externo/cron fará a chamada nem que ela já esteja programada/ativa. Não foi executada nenhuma sincronização para testar.
+
+### Decisão técnica provisória
+
+1. Para os dados externos, os dois snapshots concordam em nome e ID; somente dois escudos diferem. O versionado pode ser candidato para esses escudos, mas não há prova visual de que sejam mais novos/corretos sem nova captura autorizada da API ou comparação com uma fonte atual confiável.
+2. A classificação pode ser tratada como equivalente entre os dois caches; manter o snapshot bruto de cada origem por auditoria.
+3. A próxima sincronização inteligente da rodada 37, se executada pelo fluxo legado identificado, atualizará somente `sulamericana`. Ela não atualizará `sulamericana:2026`.
+4. Após a rodada 37, será importante comparar novamente o cache legado atualizado com o versionado antes de escolher o snapshot histórico final. Preservar ambos.
+5. Não houve alteração de banco, cache, sincronização, código funcional ou deploy nesta investigação.
+
+
+## Implementação da prévia de coleta — 01/11/2026
+
+A branch agora contém a primeira camada funcional de coleta, ainda somente leitura:
+
+- `src/lib/seasonHistoryPreview.ts`: normaliza o ranking anual, converte pontuações no formato brasileiro, relaciona equipes a IDs Cartola usando os dados externos dos caches, detecta conflitos de nomes/IDs e resolve pódios apenas quando os placares são suficientes. Empates sem decisão manual explícita permanecem pendentes.
+- A prévia preserva o payload integral do ranking, o payload integral da fonte escolhida de cada torneio e os payloads integrais das fontes alternativas. Isso é especialmente importante para a Sul-Americana, que mantém os snapshots legado e versionado para comparação.
+- `src/pages/AdminSeasonHistory.tsx`: substituiu a tela de criação de rascunho por uma prévia de coleta de 2026. A tela não grava nada no banco e não chama a API do Cartola.
+- `src/test/seasonHistoryPreview.test.ts`: cobre pontuação localizada, classificação sem limite fixo, IDs Cartola, placares agregados de ida/volta, decisão manual, empate não resolvido e preservação de fontes alternativas.
+
+### Fontes 2026 mapeadas na prévia
+
+- Ranking anual: `ranking_liga:ANUAL`.
+- Séries A/B/C: `shadow/brasileirao_serie_a/2026`, `shadow/brasileirao_serie_b/2026`, `shadow/brasileirao_serie_c/2026`.
+- Copa do Brasil: `shadow/copa_brasil/2026`, mantendo `copa:brasil` como fonte alternativa a ser comparada.
+- Libertadores: `shadow/libertadores/2026`, mantendo o cache legado `libertadores` como alternativa.
+- Sul-Americana: `sulamericana:2026`, mantendo `sulamericana` como alternativa e preservando ambos os payloads completos.
+- Champions League: `campeoes`.
+- Copa do Mundo: `copa_mundo`.
+- Intercontinental: `intercontinental`, sujeito a confirmação administrativa de que a edição foi efetivamente disputada.
+
+### Leitura somente de produção em 01/11/2026
+
+A consulta de auditoria encontrou:
+
+- `ranking_liga:ANUAL`: 60 equipes, sincronizado em 31/10/2026 13:52 UTC. É um retrato ainda provisório, não uma classificação final da temporada.
+- Séries A/B/C: 20 equipes cada; os três snapshots foram sincronizados em 31/10/2026.
+- Copa do Brasil: snapshot shadow sincronizado em 20/10/2026; precisa de atualização após os jogos finais.
+- Libertadores: snapshot shadow sincronizado em 27/10/2026.
+- Sul-Americana: versão legada sincronizada em 27/10 e versionada em 29/10; ambos permanecem preservados.
+- Champions League e Copa do Mundo: caches de 24/08/2026; exigem conferência de atualidade antes do arquivo definitivo.
+- Intercontinental: cache de 24/03/2026; não presumir que a competição foi disputada apenas porque existe um cache.
+
+Os caches da Copa do Brasil, Libertadores e Sul-Americana contêm duas entradas na fase Final, mas a existência dos confrontos não significa que seus placares finais estejam preenchidos. A prévia não deve promover esses torneios a completos sem placares decisivos e, quando houver disputa de terceiro lugar, sem o resultado dessa partida.
+
+### Estado de segurança desta etapa
+
+- Nenhuma migration aplicada.
+- Nenhuma tabela de histórico criada em produção.
+- Nenhum rascunho criado.
+- Nenhum cache operacional alterado.
+- Nenhuma chamada à API do Cartola executada.
+- Nenhum deploy de produção realizado.
+- A prévia é exclusivamente de leitura e não habilita arquivamento.
+
+
+## Fluxo transacional de arquivamento — 01/11/2026
+
+- A tela administrativa agora oferece confirmação explícita após a prévia.
+- A função PostgreSQL `archive_season_history(jsonb)` grava catálogo, classificação, competições e evento de auditoria dentro de uma única transação.
+- A função valida administrador, temporada, payload, pontuações obrigatórias e posições duplicadas.
+- A restrição única em liga + temporada impede um segundo arquivamento acidental; a tentativa duplicada retorna erro sem sobrescrever o arquivo existente.
+- A classificação completa e os snapshots de fonte principal/alternativas são preservados. Competições sem fonte não são inventadas nem inseridas.
+- Fontes auxiliares das Séries A/B/C são armazenadas como registros pendentes, sem inferir campeão. Torneios knockout só recebem status completo quando o pódio foi resolvido.
+- `profile_id` e `manager_name` permanecem nulos: não se associa participante a perfil atual sem evidência histórica inequívoca.
+- A função é `SECURITY DEFINER`, verifica `public.is_admin(auth.uid())`, restringe execução a `authenticated` e não expõe service-role no cliente.
+- A migration ainda não foi aplicada ao Supabase de produção. O fluxo permanece no PR/Preview; nenhum arquivamento real foi executado.
+- A interface exige classificação com pontuação em todas as linhas e mostra um resumo antes da confirmação. Pendências são preservadas como pendências para revisão posterior.
+
+- A etapa de revisão agora bloqueia o arquivamento enquanto qualquer torneio eliminatório estiver sem pódio confirmado. Antes do fechamento, será preciso atualizar o resultado ou implementar/usar uma declaração administrativa explícita de edição não disputada.
+- As tabelas históricas concedem somente leitura a usuários autenticados. As gravações são feitas pela RPC protegida; clientes autenticados não recebem privilégios diretos de UPDATE/DELETE/INSERT, reduzindo o risco de alteração posterior do arquivo.
+
+- A revisão permite marcar explicitamente cada torneio eliminatório sem pódio como `not_played`; essa decisão aparece no resumo de confirmação. Sem resolver ou marcar todas as edições como não disputadas, o botão de arquivamento permanece bloqueado.
+- A lista arquivada inclui também torneios sem cache, preservando o fato de que foram revisados e classificados como pendentes ou não disputados, em vez de omiti-los silenciosamente.
+- A tipagem local do cliente Supabase foi atualizada para reconhecer a RPC `archive_season_history`.
+
+- A RPC exige também `summary.seasonFinalized = true`, além da autorização administrativa. A interface solicita uma confirmação explícita de encerramento da temporada e alerta que 2026 ainda está em andamento; a função no banco repete essa validação para não depender apenas do frontend.
+- A validação SQL dos arrays JSON usa aliases explícitos de coluna para evitar ambiguidades no PostgreSQL.
+- O resumo de confirmação apresenta as linhas separadamente, facilitando a revisão dos totais antes da gravação.
+
+
+## Consulta pública do histórico — 01/11/2026
+
+- Criada a rota autenticada `/history`, protegida também pela seleção de liga.
+- A entrada "História" foi adicionada à navegação inferior.
+- A tela consulta somente `season_archives` com status `archived` e liga `liga-jacarandas`.
+- Ao selecionar uma temporada, carrega classificação e torneios exclusivamente das tabelas históricas.
+- A interface apresenta classificação completa, escudos, pontuação, campeão, vice e terceiro quando registrado.
+- Edições pendentes ou marcadas como não disputadas são identificadas sem inferir vencedores.
+- A tela não consulta `sheets_cache`, Cartola API nem endpoints de sincronização.
+- Como as migrations ainda não foram aplicadas, a tela exibirá estado vazio até existir um arquivo publicado.
+- A rota e as consultas continuam protegidas pelo RLS das tabelas históricas; somente usuários autenticados podem ler arquivos publicados.
+
+
+## Revisão final da fundação — 02/11/2026
+
+### Formatos de mata-mata registrados
+- Copa do Brasil: primeira e segunda fases, oitavas, quartas e semifinal em ida e volta; final e terceiro lugar em jogo único.
+- Libertadores e Sul-Americana: oitavas, quartas e semifinal em ida e volta; final e terceiro lugar em jogo único.
+- Champions League: playoffs, oitavas, quartas e semifinal em ida e volta; final e terceiro lugar em jogo único.
+- Copa do Mundo: 16 avos, oitavas, quartas, semifinal, final e terceiro lugar em jogo único.
+- Intercontinental: quartas, semifinal, final e terceiro lugar em jogo único. A edição 2026 está sem equipes/confrontos e depende de decisão administrativa sobre sua realização; não classificar como disputada ou não disputada antes dessa decisão.
+
+### Validação das fases
+A prévia administrativa valida agora também as fases anteriores à final, respeitando o formato configurado para cada competição. Confrontos incompletos geram alertas por fase e quantidade, sem inferir vencedores. Fases com valor nulo são toleradas como etapas ainda não alimentadas, como ocorre atualmente na Intercontinental antes da classificação dos participantes.
+
+### Auditoria dos caches em 02/11/2026
+- Champions League: Final (2), Playoffs (8), Oitavas (8), Quartas (4) e Semifinal (2); todos os confrontos das fases anteriores possuem equipes e placares de ida/volta preenchidos. A final e o terceiro lugar têm placares de jogo único.
+- Copa do Mundo: 16 avos (16), Oitavas (8), Quartas (4), Semifinal (2) e Final (2); os campos de placar único estão preenchidos nos confrontos retornados pela auditoria.
+- Copa do Brasil: 1ª Fase (28) e 2ª Fase (16) com placares de ida/volta; oitavas (8) e quartas (4) também preenchidas; semifinal (2) ainda sem placares; final (2) sem equipes/placares no cache legado consultado.
+- Libertadores: oitavas (8) e quartas (4) com ida/volta preenchidas; semifinal (2) ainda sem placares; final (2) sem equipes/placares no cache shadow consultado.
+- Sul-Americana: oitavas (8), quartas (4) e semifinal (2) com ida/volta preenchidas; final (2) sem placares no cache versionado consultado. O cache legado permanece preservado como fonte alternativa.
+- Intercontinental: fases quartas, semifinal e final existem no objeto JSON, mas os valores são nulos, consistente com a ausência atual de participantes.
+
+A auditoria acima é uma fotografia dos caches disponíveis no momento; os dados devem ser atualizados e revisados novamente quando a temporada e cada competição forem encerradas.
+
+### CI e Preview
+- Commit da validação de fases anteriores: `900063591ae17086d2c791d40557cc6deff90e4d`.
+- GitHub Actions #41370855245: jobs `test` e `postgres-integration` concluídos com sucesso; testes unitários e build frontend passaram.
+- Vercel Preview: deployment concluído/Ready para o commit, disponível em https://liga-2-0-launchpad-6wrb-git-feature-season-histo-01622f-fkmello.vercel.app.
+- A integração automatizada usa PostgreSQL 16 com estrutura de Auth/roles compatível simulada; ainda não equivale a um teste E2E com Supabase Auth e PostgREST reais.
+
+### Limite entre fundação técnica e encerramento de temporada
+A fundação técnica do histórico está implementada e validada no Preview. Isso não significa que a temporada 2026 esteja pronta para arquivamento. O arquivamento real continuará bloqueado até:
+1. encerramento oficial da temporada e atualização do ranking anual final;
+2. atualização e revisão dos caches das competições;
+3. decisão explícita sobre a realização da Intercontinental;
+4. resolução dos pódios ou marcação administrativa justificada dos torneios não disputados;
+5. confirmação administrativa explícita no fluxo de arquivamento.
+
+Nenhuma migration foi aplicada em produção, nenhum arquivo histórico foi gravado e nenhum deploy de produção foi realizado. O PR permanece Draft aguardando decisão explícita de promoção para revisão/merge.

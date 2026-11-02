@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [feat/copa-brasil-shadow-sync]
+    branches: [feat/copa-brasil-shadow-sync, feature/season-history-2027-foundation]
 
 permissions:
   contents: read
@@ -25,3 +25,32 @@ jobs:
         run: npm test
       - name: Build frontend
         run: npm run build
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: season_history_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d season_history_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated Supabase-compatible roles and auth schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d season_history_test -v ON_ERROR_STOP=1 -f supabase/tests/season_history_bootstrap.sql
+      - name: Apply migrations and run PostgreSQL integration checks
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d season_history_test -v ON_ERROR_STOP=1 -f supabase/tests/season_history_integration.sql

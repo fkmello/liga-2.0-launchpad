@@ -1,5 +1,5 @@
 import AppLayout from '@/components/layout/AppLayout';
-import { Shield, Ticket, Users, Trophy, Medal, ChevronRight, RefreshCw, CheckCircle2, Clock, Zap, AlertTriangle } from 'lucide-react';
+import { Shield, Ticket, Users, Trophy, Medal, Archive, ChevronRight, RefreshCw, CheckCircle2, Clock, Zap, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +24,7 @@ const adminOptions = [
   { name: 'Gestão de Usuários', icon: Users, path: '/admin/users' },
   { name: 'Gerenciar Torneios', icon: Trophy, path: '/admin/tournaments' },
   { name: 'Liga Clássica', icon: Medal, path: '/admin/league' },
+  { name: 'Histórico de Temporadas', icon: Archive, path: '/admin/season-history' },
 ];
 
 const typeLabels: Record<string, string> = {

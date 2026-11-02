@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Trophy, Medal, LogOut, Shield, User } from 'lucide-react';
+import { Home, Trophy, Medal, LogOut, Shield, User, Archive } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppLeague } from '@/contexts/AppLeagueContext';
 import { cn } from '@/lib/utils';
@@ -35,6 +35,7 @@ const BottomNav = () => {
   const navItems = [
     { path: '/dashboard', label: 'Principal', icon: Home },
     { path: '/tournaments', label: 'Torneios', icon: Trophy },
+    { path: '/history', label: 'História', icon: Archive },
     ...(isBrasileirao ? [{ path: '/league', label: 'Liga', icon: Medal }] : []),
     ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: Shield }] : []),
     { path: '/profile', label: 'Perfil', icon: User },
