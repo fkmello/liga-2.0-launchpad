@@ -57,17 +57,18 @@ export type SeasonHistoryPreview = {
 
 type KnockoutFormat = {
   earlierRounds: 'two_legged' | 'single_match';
+  earlierPhaseAliases: string[][];
   final: 'single_match';
   thirdPlace: 'single_match';
 };
 
 const KNOCKOUT_FORMATS: Record<string, KnockoutFormat> = {
-  'copa-do-brasil': { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
-  libertadores: { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
-  sulamericana: { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
-  'champions-league': { earlierRounds: 'two_legged', final: 'single_match', thirdPlace: 'single_match' },
-  'copa-do-mundo': { earlierRounds: 'single_match', final: 'single_match', thirdPlace: 'single_match' },
-  'copa-intercontinental': { earlierRounds: 'single_match', final: 'single_match', thirdPlace: 'single_match' },
+  'copa-do-brasil': { earlierRounds: 'two_legged', earlierPhaseAliases: [['1ª Fase'], ['2ª Fase'], ['Oitavas de Final'], ['Quartas de Final'], ['Semifinal']], final: 'single_match', thirdPlace: 'single_match' },
+  libertadores: { earlierRounds: 'two_legged', earlierPhaseAliases: [['Oitavas de Final'], ['Quartas de Final'], ['Semifinal']], final: 'single_match', thirdPlace: 'single_match' },
+  sulamericana: { earlierRounds: 'two_legged', earlierPhaseAliases: [['Oitavas de Final'], ['Quartas de Final'], ['Semifinal']], final: 'single_match', thirdPlace: 'single_match' },
+  'champions-league': { earlierRounds: 'two_legged', earlierPhaseAliases: [['Playoffs'], ['Oitavas de Final'], ['Quartas de Final'], ['Semifinal']], final: 'single_match', thirdPlace: 'single_match' },
+  'copa-do-mundo': { earlierRounds: 'single_match', earlierPhaseAliases: [['16avos'], ['oitavas'], ['quartas'], ['semifinal']], final: 'single_match', thirdPlace: 'single_match' },
+  'copa-intercontinental': { earlierRounds: 'single_match', earlierPhaseAliases: [['Quartas de Final'], ['Semifinal']], final: 'single_match', thirdPlace: 'single_match' },
 };
 
 const TOURNAMENT_SOURCES = [
@@ -173,6 +174,39 @@ function resolveMatch(
   };
 }
 
+function validateEarlierRounds(data: Record<string, any>, format: KnockoutFormat): string[] {
+  const phases = data?.fases ?? {};
+  const warnings: string[] = [];
+  const teams = externalTeamMap(data);
+
+  for (const aliases of format.earlierPhaseAliases) {
+    const phaseEntry = Object.entries(phases).find(([name]) =>
+      aliases.some(alias => normalizeName(alias) === normalizeName(name)),
+    );
+    if (!phaseEntry) {
+      warnings.push(`Fase anterior não encontrada no cache: ${aliases[0]}.`);
+      continue;
+    }
+
+    const [phaseName, phaseData] = phaseEntry as [string, any];
+    // Fases nulas representam etapas ainda não alimentadas, como a Intercontinental
+    // antes da classificação das equipes; não são tratadas como placares inválidos.
+    if (phaseData == null) continue;
+    const matches = Array.isArray(phaseData?.matches) ? phaseData.matches : null;
+    if (!matches) {
+      warnings.push(`A fase ${phaseName} não possui uma lista de partidas reconhecível.`);
+      continue;
+    }
+    const unresolved = matches.filter((match: Record<string, any>) =>
+      !resolveMatch(match, teams, format.earlierRounds),
+    ).length;
+    if (unresolved) {
+      warnings.push(`${phaseName}: ${unresolved} de ${matches.length} confronto(s) ainda sem resultado decisivo completo.`);
+    }
+  }
+  return warnings;
+}
+
 function buildPodium(
   data: Record<string, any>,
   finalMatches: Record<string, any>[],
@@ -226,6 +260,7 @@ function tournamentPreview(
   } else {
     if (result.unresolved) warnings.push(result.unresolved);
     if (result.thirdMissing) warnings.push('Terceiro colocado ainda não identificado por resultado decisivo da disputa de terceiro lugar.');
+    if (knockoutFormat) warnings.push(...validateEarlierRounds(selected.data, knockoutFormat));
   }
   if (alternates.length) warnings.push('Há mais de uma fonte de cache para esta competição; as fontes alternativas foram preservadas para conferência.');
   if (setting && !setting.enabled && !setting.finished) warnings.push('O torneio está desabilitado e não marcado como finalizado na configuração atual; confirmar se a edição 2026 foi efetivamente disputada antes de arquivar ou marcar como não disputada.');
