@@ -47,7 +47,7 @@ const AdminLeague = () => {
   const [classicSyncResult, setClassicSyncResult] = useState<ClassicSyncResult | null>(null);
   const [classicSyncError, setClassicSyncError] = useState<string | null>(null);
 
-  const runClassicLeagueSync = async () => {
+  const runClassicLeagueSync = async (round?: number) => {
     setSyncingClassicLeague(true);
     setClassicSyncResult(null);
     setClassicSyncError(null);
@@ -60,7 +60,7 @@ const AdminLeague = () => {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${CURRENT_SEASON_YEAR}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${CURRENT_SEASON_YEAR}${round ? `&round=${round}` : ''}`,
         {
           method: 'POST',
           headers: {
@@ -134,6 +134,30 @@ const AdminLeague = () => {
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction onClick={runClassicLeagueSync}>
                     Confirmar teste
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="w-full" disabled={syncingClassicLeague}>
+                  Gerar snapshot-base de novembro (rodada 33)
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Consultar a rodada 33 para o baseline de novembro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    A API do Cartola será consultada para os mesmos 60 participantes, usando a pontuação acumulada até a rodada 33.
+                    Esse snapshot será usado como base para calcular novembro pela diferença entre as rodadas 34 e 33.
+                    Nenhum ranking será alterado por esta operação.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => runClassicLeagueSync(33)}>
+                    Gerar snapshot da rodada 33
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
