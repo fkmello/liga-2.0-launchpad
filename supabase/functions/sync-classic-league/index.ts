@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
 
     const { data: existing, error: existingError } = await admin
       .from('classic_league_round_snapshots')
-      .select('id,status,received_team_count')
+      .select('id,status,received_team_count,requested_at')
       .eq('season_year', season)
       .eq('round_number', targetRound)
       .maybeSingle();
@@ -122,13 +122,18 @@ Deno.serve(async (req) => {
       });
     }
     if (existing?.status === 'in_progress') {
-      return json({ error: 'Já existe uma sincronização em andamento para esta rodada.', snapshot_id: existing.id }, 409);
+      return json({
+        error: 'Já existe uma sincronização em andamento para esta rodada. Se ela foi interrompida, será necessária recuperação administrativa.',
+        snapshot_id: existing.id,
+        requested_at: existing.requested_at,
+      }, 409);
     }
 
     let snapshotId: string;
     if (existing?.id) {
-      snapshotId = existing.id;
-      const { error: resetError } = await admin
+      // Compare-and-set: apenas uma solicitação pode reivindicar um snapshot failed.
+      // A condição no status evita que duas tentativas concorrentes assumam o mesmo registro.
+      const { data: reclaimed, error: resetError } = await admin
         .from('classic_league_round_snapshots')
         .update({
           status: 'in_progress', source: 'cartola_api',
@@ -136,13 +141,25 @@ Deno.serve(async (req) => {
           market_round: market.rodada_atual, market_status: market.status_mercado,
           expected_team_count: 60, received_team_count: 0,
           requested_at: new Date().toISOString(), completed_at: null, error_message: null,
-          metadata: { retried: true },
+          metadata: { retried: true, requested_by: userId },
         })
-        .eq('id', snapshotId);
+        .eq('id', existing.id)
+        .eq('status', 'failed')
+        .select('id')
+        .maybeSingle();
       if (resetError) throw new Error(`Falha ao reiniciar snapshot: ${resetError.message}`);
+      if (!reclaimed?.id) {
+        return json({ error: 'Outra solicitação já assumiu a recuperação deste snapshot. Consulte novamente.', snapshot_id: existing.id }, 409);
+      }
+      snapshotId = reclaimed.id;
       const { error: deleteError } = await admin
         .from('classic_league_team_round_points').delete().eq('snapshot_id', snapshotId);
-      if (deleteError) throw new Error(`Falha ao limpar pontos de tentativa anterior: ${deleteError.message}`);
+      if (deleteError) {
+        await admin.from('classic_league_round_snapshots').update({
+          status: 'failed', error_message: `Falha ao limpar pontos anteriores: ${deleteError.message}`,
+        }).eq('id', snapshotId).eq('status', 'in_progress');
+        throw new Error(`Falha ao limpar pontos de tentativa anterior: ${deleteError.message}`);
+      }
     } else {
       const { data: created, error: createError } = await admin
         .from('classic_league_round_snapshots')
