@@ -22,7 +22,7 @@ const SEASON_MAX = 2100;
 type MarketStatus = { status_mercado: number; rodada_atual: number };
 type RosterTeam = ClassicLeagueRosterTeam;
 type CartolaTeam = {
-  pontos_campeonato?: number;
+  pontos_campeonato?: number | string | null;
   time?: { nome?: string; url_escudo_svg?: string };
 };
 
