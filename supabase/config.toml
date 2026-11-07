@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.tournament-cron-dispatcher]
 verify_jwt = false
+
+[functions.sync-classic-league]
+verify_jwt = false
