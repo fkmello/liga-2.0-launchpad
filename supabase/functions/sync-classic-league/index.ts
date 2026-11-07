@@ -153,7 +153,10 @@ Deno.serve(async (req) => {
       const rankings = finalRows.map((point) => {
         const accumulated = Number(point.points_championship);
         const previous = baseByTeam.get(String(point.cartola_team_id));
-        const monthly = accumulated - Number(previous);
+        if (previous === undefined) {
+          throw new Error(`Pontuação-base ausente para o time ${point.team_name}.`);
+        }
+        const monthly = accumulated - previous;
         if (!Number.isFinite(accumulated) || !Number.isFinite(previous) || !Number.isFinite(monthly) || monthly < 0) {
           throw new Error(`Pontuação mensal inválida para o time ${point.team_name}.`);
         }
