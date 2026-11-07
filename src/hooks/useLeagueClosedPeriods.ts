@@ -1,11 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCanonicalKey, CURRENT_SEASON_YEAR } from '@/utils/leaguePeriods';
-import { useAuth } from '@/contexts/AuthContext';
 
 export const useLeagueClosedPeriods = (seasonYear = CURRENT_SEASON_YEAR) => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const queryKey = ['league-closed-periods', seasonYear];
 
   const { data: closedKeys = [], isLoading } = useQuery({
@@ -28,10 +26,24 @@ export const useLeagueClosedPeriods = (seasonYear = CURRENT_SEASON_YEAR) => {
   const closePeriod = useMutation({
     mutationFn: async (label: string) => {
       const key = getCanonicalKey(label);
-      const { error } = await supabase
-        .from('league_closed_periods')
-        .insert({ period_key: key, season_year: seasonYear, closed_by: user?.id });
-      if (error) throw error;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente e tente outra vez.');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${seasonYear}&action=close_period&periodo=${encodeURIComponent(key)}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true || result.closed !== true) {
+        throw new Error(result.error || `Não foi possível fechar o período (HTTP ${response.status}).`);
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
@@ -39,12 +51,24 @@ export const useLeagueClosedPeriods = (seasonYear = CURRENT_SEASON_YEAR) => {
   const reopenPeriod = useMutation({
     mutationFn: async (label: string) => {
       const key = getCanonicalKey(label);
-      const { error } = await supabase
-        .from('league_closed_periods')
-        .delete()
-        .eq('period_key', key)
-        .eq('season_year', seasonYear);
-      if (error) throw error;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente e tente outra vez.');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${seasonYear}&action=reopen_period&periodo=${encodeURIComponent(key)}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok !== true || result.reopened !== true) {
+        throw new Error(result.error || `Não foi possível reabrir o período (HTTP ${response.status}).`);
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });

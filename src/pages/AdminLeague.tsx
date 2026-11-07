@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Medal, Lock, Unlock, Loader2, EyeOff, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -52,6 +53,7 @@ const AdminLeague = () => {
   const [syncingClassicLeague, setSyncingClassicLeague] = useState(false);
   const [classicSyncResult, setClassicSyncResult] = useState<ClassicSyncResult | null>(null);
   const [classicSyncError, setClassicSyncError] = useState<string | null>(null);
+  const [snapshotRound, setSnapshotRound] = useState('33');
 
   const runClassicLeagueSync = async (round?: number) => {
     setSyncingClassicLeague(true);
@@ -91,18 +93,16 @@ const AdminLeague = () => {
   };
 
 
-  const publishNovemberRanking = async () => {
+  const publishClassicPeriod = async (periodKey: string) => {
     setSyncingClassicLeague(true);
     setClassicSyncResult(null);
     setClassicSyncError(null);
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
-      if (!session?.access_token) {
-        throw new Error('Sua sessão expirou. Entre novamente no aplicativo e tente outra vez.');
-      }
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente e tente outra vez.');
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=2026&action=publish_monthly&periodo=NOVEMBRO&baseline_round=33&final_round=34`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${CURRENT_SEASON_YEAR}&action=publish_period&periodo=${encodeURIComponent(periodKey)}`,
         {
           method: 'POST',
           headers: {
@@ -118,12 +118,11 @@ const AdminLeague = () => {
       }
       setClassicSyncResult(result);
     } catch (error) {
-      setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao publicar novembro.');
+      setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao publicar o ranking.');
     } finally {
       setSyncingClassicLeague(false);
     }
   };
-
   const grouped = {
     geral: ALL_PERIODS.filter(p => p.group === 'geral'),
     turno: ALL_PERIODS.filter(p => p.group === 'turno'),
@@ -179,59 +178,36 @@ const AdminLeague = () => {
               </AlertDialogContent>
             </AlertDialog>
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="w-full" disabled={syncingClassicLeague}>
-                  Gerar snapshot-base de novembro (rodada 33)
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground">Gerar snapshot de uma rodada específica</p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  max={38}
+                  value={snapshotRound}
+                  onChange={(event) => setSnapshotRound(event.target.value)}
+                  className="w-24"
+                  aria-label="Rodada do snapshot"
+                />
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={syncingClassicLeague || !/^([1-9]|[12][0-9]|3[0-8])$/.test(snapshotRound)}
+                  onClick={() => runClassicLeagueSync(Number(snapshotRound))}
+                >
+                  Gerar snapshot R{snapshotRound || '—'}
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Consultar a rodada 33 para o baseline de novembro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    A API do Cartola será consultada para os mesmos 60 participantes, usando a pontuação acumulada até a rodada 33.
-                    Esse snapshot será usado como base para calcular novembro pela diferença entre as rodadas 34 e 33.
-                    Nenhum ranking será alterado por esta operação.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => runClassicLeagueSync(33)}>
-                    Gerar snapshot da rodada 33
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Permite preparar os snapshots-base dos períodos históricos. Não altera rankings.</p>
+            </div>
 
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className="w-full" variant="outline" disabled={syncingClassicLeague}>
-                  {syncingClassicLeague ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Medal className="w-4 h-4 mr-2" />}
-                  Publicar ranking de novembro (rodadas 33–34)
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Atualizar o ranking de novembro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    O ranking mensal será calculado para os 60 participantes pela diferença entre o acumulado da rodada 34 e o da rodada 33. Somente ranking_liga:NOVEMBRO será atualizado; anual, turnos e demais meses permanecerão intactos.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={publishNovemberRanking}>
-                    Calcular e publicar novembro
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
 
             {classicSyncResult && (
               <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 space-y-1">
                 <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
                   <CheckCircle2 className="w-4 h-4" />
-                  {classicSyncResult.already_complete ? 'Snapshot desta rodada já estava completo' : 'Snapshot gravado com sucesso'}
+                  {classicSyncResult.published ? 'Ranking publicado com sucesso' : classicSyncResult.already_complete ? 'Snapshot desta rodada já estava completo' : 'Snapshot gravado com sucesso'}
                 </div>
                 {classicSyncResult.published ? (
                   <p className="text-xs text-foreground">
@@ -260,6 +236,17 @@ const AdminLeague = () => {
           </CardContent>
         </Card>
 
+        {closePeriod.isError && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            Falha ao fechar período: {closePeriod.error instanceof Error ? closePeriod.error.message : 'Erro inesperado.'}
+          </div>
+        )}
+        {reopenPeriod.isError && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            Falha ao reabrir período: {reopenPeriod.error instanceof Error ? reopenPeriod.error.message : 'Erro inesperado.'}
+          </div>
+        )}
+
         {(isLoading || isLoadingDisabled) ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -272,6 +259,7 @@ const AdminLeague = () => {
                 <div className="space-y-2">
                   {grouped[group].map(period => {
                     const closed = isPeriodClosed(period.label);
+                    const canClose = period.key !== 'ANUAL';
                     const disabled = group === 'mes' && isPeriodDisabled(period.label);
                     return (
                       <Card key={period.key} className="bg-card border-border">
@@ -302,7 +290,26 @@ const AdminLeague = () => {
                               </div>
                             )}
 
-                            <AlertDialog>
+                            {!disabled && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="outline" size="sm" className="text-xs" disabled={syncingClassicLeague}>Publicar</Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Publicar ranking de {period.label}?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      O ranking será calculado a partir dos snapshots completos da API para os 60 participantes. Somente ranking_liga:{period.key} será atualizado. Períodos fechados usam os limites registrados no fechamento.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => publishClassicPeriod(period.key)}>Calcular e publicar</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                            {canClose && <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
                                   variant={closed ? 'outline' : 'destructive'}
@@ -336,7 +343,7 @@ const AdminLeague = () => {
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
-                            </AlertDialog>
+                            </AlertDialog>}
                           </div>
                         </CardContent>
                       </Card>
