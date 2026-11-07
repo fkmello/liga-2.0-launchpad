@@ -25,6 +25,12 @@ jobs:
         run: npm test
       - name: Build frontend
         run: npm run build
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check classic league Edge Function
+        run: deno check supabase/functions/sync-classic-league/index.ts
 
   postgres-integration:
     runs-on: ubuntu-latest
