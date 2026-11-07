@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
         .insert(points.map((point) => ({ ...point, snapshot_id: snapshotId })));
       if (pointsError) throw new Error(`Falha ao gravar pontos dos participantes: ${pointsError.message}`);
 
-      const { error: completeError } = await admin
+      const { data: completed, error: completeError } = await admin
         .from('classic_league_round_snapshots')
         .update({
           status: 'complete', received_team_count: points.length,
@@ -222,8 +222,11 @@ Deno.serve(async (req) => {
           metadata: { requested_by: userId, market_round: market.rodada_atual, market_status: market.status_mercado },
         })
         .eq('id', snapshotId)
-        .eq('status', 'in_progress');
+        .eq('status', 'in_progress')
+        .select('id')
+        .maybeSingle();
       if (completeError) throw new Error(`Falha ao concluir snapshot: ${completeError.message}`);
+      if (!completed?.id) throw new Error('Snapshot não pôde ser marcado como completo; estado foi alterado durante a sincronização.');
 
       return json({
         ok: true, season, round: targetRound, market_round: market.rodada_atual,
