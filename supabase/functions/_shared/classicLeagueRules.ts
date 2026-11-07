@@ -42,7 +42,7 @@ export function parseClassicLeagueRoster(data: unknown): ClassicLeagueRosterTeam
     if (!Array.isArray(row)) continue;
     const id = String(row[3] ?? '').trim();
     const name = String(row[2] ?? '').trim();
-    if (!/^\\d+$/.test(id) || !name) continue;
+    if (!/^\d+$/.test(id) || !name) continue;
     teams.push({ id, name, badge: String(row[5] ?? '').trim() || null });
   }
 
