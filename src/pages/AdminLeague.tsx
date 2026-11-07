@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
-import { Medal, Lock, Unlock, Loader2, EyeOff } from 'lucide-react';
+import { Medal, Lock, Unlock, Loader2, EyeOff, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { ALL_PERIODS, CURRENT_SEASON_YEAR, getLabelFromKey } from '@/utils/leaguePeriods';
 import { useLeagueClosedPeriods } from '@/hooks/useLeagueClosedPeriods';
 import { useLeagueDisabledPeriods } from '@/hooks/useLeagueDisabledPeriods';
+import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,9 +27,62 @@ const groupLabels: Record<string, string> = {
   mes: 'Meses',
 };
 
+type ClassicSyncResult = {
+  ok?: boolean;
+  already_complete?: boolean;
+  season?: number;
+  round?: number;
+  market_round?: number;
+  market_status?: number;
+  expected_team_count?: number;
+  received_team_count?: number;
+  snapshot_id?: string;
+  error?: string;
+};
+
 const AdminLeague = () => {
   const { isPeriodClosed, isLoading, closePeriod, reopenPeriod } = useLeagueClosedPeriods();
   const { isPeriodDisabled, isLoading: isLoadingDisabled, disablePeriod, enablePeriod } = useLeagueDisabledPeriods();
+  const [syncingClassicLeague, setSyncingClassicLeague] = useState(false);
+  const [classicSyncResult, setClassicSyncResult] = useState<ClassicSyncResult | null>(null);
+  const [classicSyncError, setClassicSyncError] = useState<string | null>(null);
+
+  const runClassicLeagueSync = async () => {
+    setSyncingClassicLeague(true);
+    setClassicSyncResult(null);
+    setClassicSyncError(null);
+
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.access_token) {
+        throw new Error('Sua sessão expirou. Entre novamente no aplicativo e tente outra vez.');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${CURRENT_SEASON_YEAR}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const result = await response.json().catch(() => ({})) as ClassicSyncResult;
+      if (!response.ok || result.ok !== true) {
+        throw new Error(result.error || `A sincronização falhou (HTTP ${response.status}).`);
+      }
+
+      setClassicSyncResult(result);
+    } catch (error) {
+      setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao sincronizar a Liga Clássica.');
+    } finally {
+      setSyncingClassicLeague(false);
+    }
+  };
 
   const grouped = {
     geral: ALL_PERIODS.filter(p => p.group === 'geral'),
@@ -43,6 +98,71 @@ const AdminLeague = () => {
           <h1 className="text-xl font-bold text-foreground">Liga Clássica</h1>
         </div>
         <p className="text-xs text-muted-foreground mb-6">Temporada {CURRENT_SEASON_YEAR}</p>
+
+        <Card className="mb-6 border-primary/30">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Teste de sincronização pela API</h2>
+              <Badge variant="outline">Admin</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Consulta os 60 participantes na API do Cartola e grava um snapshot da rodada concluída.
+              Não altera o ranking atual nem a sincronização pela planilha.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button className="w-full" disabled={syncingClassicLeague}>
+                  {syncingClassicLeague ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  {syncingClassicLeague ? 'Consultando os 60 participantes...' : 'Testar sincronização'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Executar teste da Liga Clássica?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    A API será consultada para os 60 times da temporada {CURRENT_SEASON_YEAR}.
+                    Os dados serão gravados como snapshot da última rodada considerada concluída.
+                    O ranking em produção e a sincronização pela planilha não serão alterados.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={runClassicLeagueSync}>
+                    Confirmar teste
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {classicSyncResult && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                  {classicSyncResult.already_complete ? 'Snapshot desta rodada já estava completo' : 'Snapshot gravado com sucesso'}
+                </div>
+                <p className="text-xs text-foreground">
+                  Temporada {classicSyncResult.season} · Rodada {classicSyncResult.round} ·
+                  {' '}{classicSyncResult.received_team_count}/{classicSyncResult.expected_team_count} participantes
+                </p>
+                {classicSyncResult.snapshot_id && (
+                  <p className="text-[10px] text-muted-foreground break-all">Snapshot: {classicSyncResult.snapshot_id}</p>
+                )}
+              </div>
+            )}
+
+            {classicSyncError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-destructive">{classicSyncError}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {(isLoading || isLoadingDisabled) ? (
           <div className="flex items-center justify-center py-12">
