@@ -68,7 +68,12 @@ function parseRoster(data: unknown): RosterTeam[] {
 async function fetchTeam(team: RosterTeam, round: number) {
   const url = `${API}/time/id/${encodeURIComponent(team.id)}/${round}`;
   const payload = await fetchJsonWithRetry(url, {}, { timeoutMs: 12000, retries: 2 }) as CartolaTeam;
-  const points = Number(payload?.pontos_campeonato);
+  const rawPoints = payload?.pontos_campeonato;
+  const points = typeof rawPoints === 'number'
+    ? rawPoints
+    : typeof rawPoints === 'string' && rawPoints.trim() !== ''
+      ? Number(rawPoints)
+      : Number.NaN;
   if (!Number.isFinite(points)) {
     throw new Error(`Resposta inválida para o time ${team.name} (${team.id}): pontos_campeonato ausente ou não numérico.`);
   }
