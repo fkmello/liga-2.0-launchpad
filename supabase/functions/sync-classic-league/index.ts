@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fetchJsonWithRetry } from '../_shared/sync/http.ts';
+import { parseClassicLeagueRoster, resolveClassicLeagueCompletedRound } from '../_shared/classicLeagueRules.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,56 +15,15 @@ const json = (body: unknown, status = 200) =>
   });
 
 const API = 'https://api.cartola.globo.com';
-const EXPECTED_TEAMS = 60;
 const MAX_CONCURRENCY = 8;
 const SEASON_MIN = 2000;
 const SEASON_MAX = 2100;
 
 type MarketStatus = { status_mercado: number; rodada_atual: number };
-type RosterTeam = { id: string; name: string; badge: string | null };
 type CartolaTeam = {
   pontos_campeonato?: number;
   time?: { nome?: string; url_escudo_svg?: string };
 };
-
-function resolveCompletedRound(market: MarketStatus): number {
-  const status = Number(market.status_mercado);
-  const currentRound = Number(market.rodada_atual);
-  if (!Number.isInteger(currentRound) || currentRound < 1 || currentRound > 38) {
-    throw new Error('Rodada atual retornada pela API Cartola é inválida.');
-  }
-  // A rodada 38 é exceção: após o encerramento definitivo não existe R39
-  // para disparar a sincronização convencional.
-  if (status === 6 && currentRound === 38) return 38;
-  if (status === 1 && currentRound > 1) return currentRound - 1;
-  if (status === 1 && currentRound === 1) {
-    throw new Error('Ainda não existe rodada concluída nesta temporada.');
-  }
-  if (status === 2) throw new Error('Mercado fechado; não há confirmação segura de rodada concluída.');
-  if (status === 4) throw new Error('Mercado em manutenção; sincronização bloqueada.');
-  if (status === 6) throw new Error('Temporada finalizada sem confirmação da rodada 38.');
-  throw new Error(`Status de mercado não elegível para sincronização: ${status}.`);
-}
-
-function parseRoster(data: unknown): RosterTeam[] {
-  const root = (data ?? {}) as { raw?: unknown };
-  if (!Array.isArray(root.raw)) throw new Error('Cache dados_externos:liga_classica sem campo raw válido.');
-  const teams: RosterTeam[] = [];
-  for (const row of root.raw as unknown[][]) {
-    if (!Array.isArray(row)) continue;
-    const id = String(row[3] ?? '').trim();
-    const name = String(row[2] ?? '').trim();
-    if (!/^\d+$/.test(id) || !name) continue;
-    teams.push({ id, name, badge: String(row[5] ?? '').trim() || null });
-  }
-  const unique = new Set(teams.map((team) => team.id));
-  if (teams.length !== EXPECTED_TEAMS || unique.size !== EXPECTED_TEAMS) {
-    throw new Error(
-      `Cadastro da Liga Clássica inválido: esperados ${EXPECTED_TEAMS} times e IDs únicos; encontrados ${teams.length} linhas válidas e ${unique.size} IDs.`,
-    );
-  }
-  return teams;
-}
 
 async function fetchTeam(team: RosterTeam, round: number) {
   const url = `${API}/time/id/${encodeURIComponent(team.id)}/${round}`;
@@ -136,7 +96,7 @@ Deno.serve(async (req) => {
     }
 
     const market = await fetchJsonWithRetry(`${API}/mercado/status`, {}, { timeoutMs: 10000, retries: 2 }) as MarketStatus;
-    const targetRound = resolveCompletedRound(market);
+    const targetRound = resolveClassicLeagueCompletedRound(market);
 
     const { data: cache, error: cacheError } = await admin
       .from('sheets_cache')
@@ -145,7 +105,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (cacheError) throw new Error(`Falha ao carregar participantes: ${cacheError.message}`);
     if (!cache?.data) throw new Error('Cache dados_externos:liga_classica não encontrado.');
-    const roster = parseRoster(cache.data);
+    const roster = parseClassicLeagueRoster(cache.data);
 
     const { data: existing, error: existingError } = await admin
       .from('classic_league_round_snapshots')
@@ -173,7 +133,7 @@ Deno.serve(async (req) => {
           status: 'in_progress', source: 'cartola_api',
           source_endpoint: `${API}/time/id/{id}/${targetRound}`,
           market_round: market.rodada_atual, market_status: market.status_mercado,
-          expected_team_count: EXPECTED_TEAMS, received_team_count: 0,
+          expected_team_count: 60, received_team_count: 0,
           requested_at: new Date().toISOString(), completed_at: null, error_message: null,
           metadata: { retried: true },
         })
@@ -189,7 +149,7 @@ Deno.serve(async (req) => {
           season_year: season, round_number: targetRound, source: 'cartola_api',
           source_endpoint: `${API}/time/id/{id}/${targetRound}`,
           market_round: market.rodada_atual, market_status: market.status_mercado,
-          status: 'in_progress', expected_team_count: EXPECTED_TEAMS,
+          status: 'in_progress', expected_team_count: 60,
           received_team_count: 0, metadata: { requested_by: userId },
         })
         .select('id')
@@ -205,7 +165,7 @@ Deno.serve(async (req) => {
 
     try {
       const points = await inChunks(roster, MAX_CONCURRENCY, (team) => fetchTeam(team, targetRound));
-      if (points.length !== EXPECTED_TEAMS || new Set(points.map((p) => p.cartola_team_id)).size !== EXPECTED_TEAMS) {
+      if (points.length !== 60 || new Set(points.map((p) => p.cartola_team_id)).size !== 60) {
         throw new Error(`Validação final falhou: recebidos ${points.length} registros.`);
       }
 
@@ -230,7 +190,7 @@ Deno.serve(async (req) => {
 
       return json({
         ok: true, season, round: targetRound, market_round: market.rodada_atual,
-        market_status: market.status_mercado, expected_team_count: EXPECTED_TEAMS,
+        market_status: market.status_mercado, expected_team_count: 60,
         received_team_count: points.length, snapshot_id: snapshotId,
       });
     } catch (error) {
