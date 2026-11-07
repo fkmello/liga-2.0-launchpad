@@ -5,7 +5,7 @@ import { parseClassicLeagueRoster, resolveClassicLeagueCompletedRound, type Clas
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+    'authorization, x-client-info, apikey, content-type, x-sync-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const json = (body: unknown, status = 200) =>
@@ -67,33 +67,42 @@ Deno.serve(async (req) => {
       return json({ error: 'Configuração Supabase incompleta.' }, 500);
     }
 
-    // Apenas usuário autenticado com papel admin pode iniciar um snapshot.
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Não autorizado.' }, 401);
-    const token = authHeader.slice('Bearer '.length);
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) return json({ error: 'Não autorizado.' }, 401);
+    const url = new URL(req.url);
+    const action = url.searchParams.get('action');
+    const cronMode = action === 'cron_snapshot' || action === 'publish_period';
+    const cronSecret = Deno.env.get('TOURNAMENT_CRON_SECRET') ?? Deno.env.get('TOURNAMENT_SYNC_SECRET_V2') ?? Deno.env.get('TOURNAMENT_SYNC_SECRET');
+    const providedSecret = req.headers.get('x-sync-secret');
+    const cronAuthorized = cronMode && Boolean(cronSecret && providedSecret && providedSecret === cronSecret);
 
     const admin = createClient(supabaseUrl, serviceKey);
-    const userId = String(claimsData.claims.sub);
-    const { data: role, error: roleError } = await admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-    if (roleError) throw new Error(`Falha ao validar papel administrativo: ${roleError.message}`);
-    if (!role) return json({ error: 'Acesso negado — apenas admins.' }, 403);
-
-    const url = new URL(req.url);
+    let userId: string | null = null;
+    if (!cronAuthorized) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Não autorizado.' }, 401);
+      const token = authHeader.slice('Bearer '.length);
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims?.sub) return json({ error: 'Não autorizado.' }, 401);
+      userId = String(claimsData.claims.sub);
+      const { data: role, error: roleError } = await admin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+      if (roleError) throw new Error(`Falha ao validar papel administrativo: ${roleError.message}`);
+      if (!role) return json({ error: 'Acesso negado — apenas admins.' }, 403);
+    }
     const season = url.searchParams.has('season')
       ? Number(url.searchParams.get('season'))
       : new Date().getFullYear();
     if (!Number.isInteger(season) || season < SEASON_MIN || season > SEASON_MAX) {
       return json({ error: 'Parâmetro season inválido.' }, 400);
+    }
+    if (cronAuthorized && season !== 2026) {
+      return json({ error: 'A sincronização automática está habilitada somente para a temporada 2026.' }, 400);
     }
 
     let market: MarketStatus | null = null;
@@ -175,6 +184,13 @@ Deno.serve(async (req) => {
         .eq('period_key', period)
         .maybeSingle();
       if (closedError) throw new Error(`Falha ao consultar fechamento: ${closedError.message}`);
+      if (cronAuthorized && closedPeriod?.final_round !== null && closedPeriod?.final_round !== undefined) {
+        return json({ ok: true, skipped: true, reason: 'PERIOD_CLOSED', season, period });
+      }
+
+      if (cronAuthorized && !['ANUAL', '1_TURNO', '2_TURNO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'].includes(period)) {
+        return json({ error: 'Período não permitido para publicação automática.' }, 400);
+      }
 
       const monthlyBaseline: Record<string, number> = {
         FEVEREIRO: 0, MARCO: 4, ABRIL: 8, MAIO: 13,
@@ -293,6 +309,7 @@ Deno.serve(async (req) => {
     }
 
 
+    if (action === 'cron_snapshot' && !cronAuthorized) return json({ error: 'Não autorizado.' }, 401);
     const latest = await ensureMarket();
     const targetRound = requestedRound ?? latest;
 

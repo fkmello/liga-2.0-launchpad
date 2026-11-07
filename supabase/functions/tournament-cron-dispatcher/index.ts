@@ -409,6 +409,97 @@ Deno.serve(async (req) => {
     push('SKIP_DONE');
   }
 
+  // Liga Clássica: captura a última rodada concluída e publica somente períodos abertos.
+  // A autenticação usa o mesmo segredo interno do dispatcher; nenhum JWT de usuário é reutilizado.
+  try {
+    const marketProvider = resolveStatusProvider('cartola');
+    const classicMarket = await marketProvider.getMarketStatus(2026);
+    const classicStatus = classicMarket.status_mercado;
+    const classicRound = classicMarket.rodada_atual;
+    const classicTargetRound = classicStatus === MARKET_FINISHED && classicRound === 38
+      ? 38
+      : classicStatus === MARKET_OPEN && classicRound > 1
+        ? classicRound - 1
+        : null;
+
+    if (classicTargetRound !== null) {
+      const callClassic = async (action: string, period?: string) => {
+        const params = new URLSearchParams({ action, season: '2026' });
+        if (period) params.set('periodo', period);
+        const response = await fetch(`${supabaseUrl}/functions/v1/sync-classic-league?${params.toString()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-sync-secret': dispatcherSecret },
+        });
+        let body: Record<string, unknown> = {};
+        try { body = await response.json() as Record<string, unknown>; } catch { body = {}; }
+        if (!response.ok || body.ok !== true) {
+          throw new Error(String(body.error ?? `HTTP ${response.status}`));
+        }
+        return body;
+      };
+
+      try {
+        const snapshot = await callClassic('cron_snapshot');
+        const periods = ['ANUAL'];
+        if (classicTargetRound >= 19) periods.push('1_TURNO');
+        if (classicTargetRound >= 20) periods.push('2_TURNO');
+
+        const monthKey = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo', month: 'long',
+        }).format(new Date()).toUpperCase();
+        const activeMonths = new Set([
+          'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JULY', 'AUGUST',
+          'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+        ]);
+        const monthMap: Record<string, string> = {
+          FEBRUARY: 'FEVEREIRO', MARCH: 'MARCO', APRIL: 'ABRIL',
+          MAY: 'MAIO', JULY: 'JULHO', AUGUST: 'AGOSTO',
+          SEPTEMBER: 'SETEMBRO', OCTOBER: 'OUTUBRO',
+          NOVEMBER: 'NOVEMBRO', DECEMBER: 'DEZEMBRO',
+        };
+        if (activeMonths.has(monthKey)) periods.push(monthMap[monthKey]);
+
+        const publications: Record<string, unknown>[] = [];
+        for (const period of periods) {
+          try {
+            publications.push({ period, ...(await callClassic('publish_period', period)) });
+          } catch (e) {
+            publications.push({ period, ok: false, error: summarizeError(e) });
+          }
+        }
+        results.push({
+          league: 'liga_classica',
+          season: 2026,
+          decision: 'CLASSIC_LEAGUE_SYNC',
+          target_round: classicTargetRound,
+          snapshot,
+          publications,
+        });
+      } catch (e) {
+        results.push({
+          league: 'liga_classica', season: 2026,
+          decision: 'CLASSIC_LEAGUE_SYNC_ERROR',
+          target_round: classicTargetRound,
+          error: summarizeError(e),
+        });
+      }
+    } else {
+      results.push({
+        league: 'liga_classica', season: 2026,
+        decision: 'CLASSIC_LEAGUE_SKIP',
+        market_status: classicStatus,
+        current_round: classicRound,
+        reason: 'MARKET_NOT_SAFE_FOR_COMPLETED_ROUND',
+      });
+    }
+  } catch (e) {
+    results.push({
+      league: 'liga_classica', season: 2026,
+      decision: 'CLASSIC_LEAGUE_PROVIDER_ERROR',
+      error: summarizeError(e),
+    });
+  }
+
   console.log('[cron-dispatcher]', JSON.stringify({ at: new Date().toISOString(), results }));
   return json({ ok: true, results });
 });
