@@ -97,7 +97,12 @@ Deno.serve(async (req) => {
     }
 
     const market = await fetchJsonWithRetry(`${API}/mercado/status`, {}, { timeoutMs: 10000, retries: 2 }) as MarketStatus;
-    const targetRound = resolveClassicLeagueCompletedRound(market);
+    const latestCompletedRound = resolveClassicLeagueCompletedRound(market);
+    const requestedRound = url.searchParams.has('round') ? Number(url.searchParams.get('round')) : null;
+    if (requestedRound !== null && (!Number.isInteger(requestedRound) || requestedRound < 1 || requestedRound > latestCompletedRound)) {
+      return json({ error: `Parâmetro round inválido. Informe uma rodada concluída entre 1 e ${latestCompletedRound}.` }, 400);
+    }
+    const targetRound = requestedRound ?? latestCompletedRound;
 
     const { data: cache, error: cacheError } = await admin
       .from('sheets_cache')
