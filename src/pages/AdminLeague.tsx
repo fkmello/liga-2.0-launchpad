@@ -241,6 +241,11 @@ const AdminLeague = () => {
             Falha ao fechar período: {closePeriod.error instanceof Error ? closePeriod.error.message : 'Erro inesperado.'}
           </div>
         )}
+        {reopenPeriod.isError && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            Falha ao reabrir período: {reopenPeriod.error instanceof Error ? reopenPeriod.error.message : 'Erro inesperado.'}
+          </div>
+        )}
 
         {(isLoading || isLoadingDisabled) ? (
           <div className="flex items-center justify-center py-12">
