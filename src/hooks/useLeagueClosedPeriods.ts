@@ -1,11 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCanonicalKey, CURRENT_SEASON_YEAR } from '@/utils/leaguePeriods';
-import { useAuth } from '@/contexts/AuthContext';
 
 export const useLeagueClosedPeriods = (seasonYear = CURRENT_SEASON_YEAR) => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const queryKey = ['league-closed-periods', seasonYear];
 
   const { data: closedKeys = [], isLoading } = useQuery({
