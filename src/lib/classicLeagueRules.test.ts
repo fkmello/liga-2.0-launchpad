@@ -3,7 +3,7 @@ import {
   CLASSIC_LEAGUE_EXPECTED_TEAMS,
   parseClassicLeagueRoster,
   resolveClassicLeagueCompletedRound,
-} from '../../../supabase/functions/_shared/classicLeagueRules';
+} from '../../supabase/functions/_shared/classicLeagueRules';
 
 const rosterRows = () => Array.from({ length: CLASSIC_LEAGUE_EXPECTED_TEAMS }, (_, index) => [
   index + 1, '', `Time ${index + 1}`, String(1000 + index), '', `https://badge/${index}.svg`,
