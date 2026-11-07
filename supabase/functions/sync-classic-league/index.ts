@@ -104,6 +104,94 @@ Deno.serve(async (req) => {
     }
     const targetRound = requestedRound ?? latestCompletedRound;
 
+    // Publica novembro somente a partir dos snapshots completos já validados.
+    // A operação é restrita ao par de rodadas confirmado para novembro de 2026.
+    if (url.searchParams.get('action') === 'publish_monthly') {
+      const period = url.searchParams.get('periodo');
+      const baselineRound = Number(url.searchParams.get('baseline_round'));
+      const finalRound = Number(url.searchParams.get('final_round'));
+      if (season !== 2026 || period !== 'NOVEMBRO' || baselineRound !== 33 || finalRound !== 34) {
+        return json({ error: 'Publicação mensal não autorizada para os parâmetros informados.' }, 400);
+      }
+      if (finalRound > latestCompletedRound) {
+        return json({ error: `A rodada final ${finalRound} ainda não está concluída.` }, 400);
+      }
+
+      const { data: snapshots, error: snapshotsError } = await admin
+        .from('classic_league_round_snapshots')
+        .select('id,round_number,status,expected_team_count,received_team_count')
+        .eq('season_year', season)
+        .in('round_number', [baselineRound, finalRound]);
+      if (snapshotsError) throw new Error(`Falha ao consultar snapshots: ${snapshotsError.message}`);
+      const baseline = snapshots?.find((snapshot) => snapshot.round_number === baselineRound);
+      const final = snapshots?.find((snapshot) => snapshot.round_number === finalRound);
+      for (const [label, snapshot] of [['base', baseline], ['final', final]] as const) {
+        if (!snapshot || snapshot.status !== 'complete' ||
+            snapshot.expected_team_count !== 60 || snapshot.received_team_count !== 60) {
+          return json({ error: `Snapshot ${label} da rodada ${label === 'base' ? baselineRound : finalRound} não está completo com 60 participantes.` }, 409);
+        }
+      }
+
+      const { data: points, error: pointsError } = await admin
+        .from('classic_league_team_round_points')
+        .select('cartola_team_id,team_name,badge_url,points_championship,snapshot_id')
+        .in('snapshot_id', [baseline!.id, final!.id]);
+      if (pointsError) throw new Error(`Falha ao carregar pontuações: ${pointsError.message}`);
+      const baseRows = points?.filter((point) => point.snapshot_id === baseline!.id) ?? [];
+      const finalRows = points?.filter((point) => point.snapshot_id === final!.id) ?? [];
+      if (baseRows.length !== 60 || finalRows.length !== 60) {
+        return json({ error: 'Os snapshots não contêm exatamente 60 pontuações cada.' }, 409);
+      }
+
+      const baseByTeam = new Map(baseRows.map((point) => [String(point.cartola_team_id), Number(point.points_championship)]));
+      const finalIds = new Set(finalRows.map((point) => String(point.cartola_team_id)));
+      if (baseByTeam.size !== 60 || finalIds.size !== 60 ||
+          [...baseByTeam.keys()].some((id) => !finalIds.has(id))) {
+        return json({ error: 'Os participantes das rodadas 33 e 34 não correspondem integralmente.' }, 409);
+      }
+
+      const rankings = finalRows.map((point) => {
+        const accumulated = Number(point.points_championship);
+        const previous = baseByTeam.get(String(point.cartola_team_id));
+        const monthly = accumulated - Number(previous);
+        if (!Number.isFinite(accumulated) || !Number.isFinite(previous) || !Number.isFinite(monthly) || monthly < 0) {
+          throw new Error(`Pontuação mensal inválida para o time ${point.team_name}.`);
+        }
+        return {
+          badge: point.badge_url ?? '',
+          total: monthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          position: '',
+          teamName: point.team_name,
+          sortPoints: monthly,
+        };
+      }).sort((a, b) => b.sortPoints - a.sortPoints);
+
+      const publishedData = {
+        title: 'RANKING MENSAL',
+        rankings: rankings.map(({ sortPoints: _sortPoints, ...row }, index) => ({
+          ...row,
+          position: String(index + 1),
+        })),
+      };
+      const { error: publishError } = await admin
+        .from('sheets_cache')
+        .upsert({
+          cache_key: 'ranking_liga:NOVEMBRO',
+          type: 'classificacao',
+          data: publishedData,
+          synced_at: new Date().toISOString(),
+          synced_by: userId,
+        }, { onConflict: 'cache_key' });
+      if (publishError) throw new Error(`Falha ao publicar ranking de novembro: ${publishError.message}`);
+
+      return json({
+        ok: true, published: true, season, period,
+        baseline_round: baselineRound, final_round: finalRound,
+        participant_count: publishedData.rankings.length,
+        total_points: rankings.reduce((sum, row) => sum + row.sortPoints, 0),
+      });
+    }
+
     const { data: cache, error: cacheError } = await admin
       .from('sheets_cache')
       .select('data')
