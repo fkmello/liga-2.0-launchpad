@@ -270,18 +270,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Compatibilidade temporária com o botão legado de novembro.
-    if (url.searchParams.get('action') === 'publish_monthly') {
-      const period = url.searchParams.get('periodo') ?? '';
-      const baselineRound = Number(url.searchParams.get('baseline_round'));
-      const finalRound = Number(url.searchParams.get('final_round'));
-      if (period !== 'NOVEMBRO' || baselineRound !== 33 || finalRound !== 34) {
-        return json({ error: 'Parâmetros legados de publicação inválidos.' }, 400);
-      }
-      url.searchParams.set('action', 'publish_period');
-      url.searchParams.set('periodo', period);
-      return json({ error: 'Use a ação publish_period para publicar rankings.' }, 400);
-    }
 
     const { data: cache, error: cacheError } = await admin
       .from('sheets_cache')
