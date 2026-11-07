@@ -91,18 +91,16 @@ const AdminLeague = () => {
   };
 
 
-  const publishNovemberRanking = async () => {
+  const publishClassicPeriod = async (periodKey: string) => {
     setSyncingClassicLeague(true);
     setClassicSyncResult(null);
     setClassicSyncError(null);
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
-      if (!session?.access_token) {
-        throw new Error('Sua sessão expirou. Entre novamente no aplicativo e tente outra vez.');
-      }
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente e tente outra vez.');
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=2026&action=publish_monthly&periodo=NOVEMBRO&baseline_round=33&final_round=34`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=${CURRENT_SEASON_YEAR}&action=publish_period&periodo=${encodeURIComponent(periodKey)}`,
         {
           method: 'POST',
           headers: {
@@ -118,12 +116,11 @@ const AdminLeague = () => {
       }
       setClassicSyncResult(result);
     } catch (error) {
-      setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao publicar novembro.');
+      setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao publicar o ranking.');
     } finally {
       setSyncingClassicLeague(false);
     }
   };
-
   const grouped = {
     geral: ALL_PERIODS.filter(p => p.group === 'geral'),
     turno: ALL_PERIODS.filter(p => p.group === 'turno'),
@@ -204,28 +201,6 @@ const AdminLeague = () => {
             </AlertDialog>
 
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className="w-full" variant="outline" disabled={syncingClassicLeague}>
-                  {syncingClassicLeague ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Medal className="w-4 h-4 mr-2" />}
-                  Publicar ranking de novembro (rodadas 33–34)
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Atualizar o ranking de novembro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    O ranking mensal será calculado para os 60 participantes pela diferença entre o acumulado da rodada 34 e o da rodada 33. Somente ranking_liga:NOVEMBRO será atualizado; anual, turnos e demais meses permanecerão intactos.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={publishNovemberRanking}>
-                    Calcular e publicar novembro
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
 
             {classicSyncResult && (
               <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 space-y-1">
@@ -302,6 +277,25 @@ const AdminLeague = () => {
                               </div>
                             )}
 
+                            {!disabled && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="outline" size="sm" className="text-xs" disabled={syncingClassicLeague}>Publicar</Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Publicar ranking de {period.label}?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      O ranking será calculado a partir dos snapshots completos da API para os 60 participantes. Somente ranking_liga:{period.key} será atualizado. Períodos fechados usam os limites registrados no fechamento.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => publishClassicPeriod(period.key)}>Calcular e publicar</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
