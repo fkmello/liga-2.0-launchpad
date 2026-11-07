@@ -113,6 +113,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (url.searchParams.get('action') === 'reopen_period') {
+      const period = String(url.searchParams.get('periodo') ?? '').toUpperCase();
+      const allowed = new Set(['1_TURNO', '2_TURNO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO']);
+      if (season !== 2026 || !allowed.has(period)) return json({ error: 'Período inválido ou inativo para reabertura.' }, 400);
+      const { error: reopenError } = await admin.from('league_closed_periods')
+        .delete().eq('season_year', season).eq('period_key', period);
+      if (reopenError) throw new Error(`Falha ao reabrir período: ${reopenError.message}`);
+      return json({ ok: true, reopened: true, period });
+    }
+
     if (url.searchParams.get('action') === 'close_period') {
       const period = String(url.searchParams.get('periodo') ?? '').toUpperCase();
       const baselines: Record<string, number> = {
