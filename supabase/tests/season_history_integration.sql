@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP on
--- Apply only the two season-history migrations to a disposable PostgreSQL database.
+-- Apply the season-history and classic-league migrations to a disposable PostgreSQL database.
 \i supabase/migrations/20261031193000_season_history_foundation.sql
 \i supabase/migrations/20261101130000_archive_season_history_rpc.sql
 \i supabase/migrations/20261107153000_classic_league_snapshots.sql
