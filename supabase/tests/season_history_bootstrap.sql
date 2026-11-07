@@ -53,3 +53,12 @@ ON CONFLICT DO NOTHING;
 INSERT INTO public.user_roles(user_id,role)
 VALUES ('00000000-0000-0000-0000-000000000001','admin')
 ON CONFLICT DO NOTHING;
+
+-- Minimal pre-existing table required by the classic-league snapshot migration.
+CREATE TABLE IF NOT EXISTS public.league_closed_periods (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  period_key text NOT NULL,
+  season_year integer NOT NULL,
+  closed_at timestamptz NOT NULL DEFAULT now(),
+  closed_by uuid
+);
