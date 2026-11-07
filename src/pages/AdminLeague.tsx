@@ -236,6 +236,12 @@ const AdminLeague = () => {
           </CardContent>
         </Card>
 
+        {closePeriod.isError && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            Falha ao fechar período: {closePeriod.error instanceof Error ? closePeriod.error.message : 'Erro inesperado.'}
+          </div>
+        )}
+
         {(isLoading || isLoadingDisabled) ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -248,6 +254,7 @@ const AdminLeague = () => {
                 <div className="space-y-2">
                   {grouped[group].map(period => {
                     const closed = isPeriodClosed(period.label);
+                    const canClose = period.key !== 'ANUAL';
                     const disabled = group === 'mes' && isPeriodDisabled(period.label);
                     return (
                       <Card key={period.key} className="bg-card border-border">
@@ -297,7 +304,7 @@ const AdminLeague = () => {
                                 </AlertDialogContent>
                               </AlertDialog>
                             )}
-                            <AlertDialog>
+                            {canClose && <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
                                   variant={closed ? 'outline' : 'destructive'}
@@ -331,7 +338,7 @@ const AdminLeague = () => {
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
-                            </AlertDialog>
+                            </AlertDialog>}
                           </div>
                         </CardContent>
                       </Card>
