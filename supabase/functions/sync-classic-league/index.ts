@@ -104,6 +104,42 @@ Deno.serve(async (req) => {
     }
     const targetRound = requestedRound ?? latestCompletedRound;
 
+    if (url.searchParams.get('action') === 'close_period') {
+      const period = String(url.searchParams.get('periodo') ?? '').toUpperCase();
+      const baselines: Record<string, number> = {
+        FEVEREIRO: 0, MARCO: 4, ABRIL: 8, MAIO: 13, JULHO: 18,
+        AGOSTO: 21, SETEMBRO: 25, OUTUBRO: 28, NOVEMBRO: 33,
+        '1_TURNO': 0, '2_TURNO': 19,
+      };
+      const allowed = new Set(['1_TURNO', '2_TURNO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO']);
+      if (season !== 2026 || !allowed.has(period)) return json({ error: 'Período inválido ou inativo para fechamento.' }, 400);
+      let baselineRound = baselines[period] ?? null;
+      if (period === 'DEZEMBRO') {
+        const { data: november, error: novemberError } = await admin.from('league_closed_periods')
+          .select('final_round').eq('season_year', season).eq('period_key', 'NOVEMBRO').maybeSingle();
+        if (novemberError) throw new Error(`Falha ao consultar fechamento de novembro: ${novemberError.message}`);
+        baselineRound = november?.final_round ?? null;
+      }
+      const finalRound = period === '1_TURNO' ? 19 : latestCompletedRound;
+      if (baselineRound === null || baselineRound >= finalRound) {
+        return json({ error: 'Não foi possível determinar os limites do período. Verifique o fechamento do mês anterior.' }, 409);
+      }
+      const { data: snapshot, error: snapshotError } = await admin.from('classic_league_round_snapshots')
+        .select('id,status,expected_team_count,received_team_count')
+        .eq('season_year', season).eq('round_number', finalRound).maybeSingle();
+      if (snapshotError) throw new Error(`Falha ao consultar snapshot final: ${snapshotError.message}`);
+      if (!snapshot || snapshot.status !== 'complete' || snapshot.expected_team_count !== 60 || snapshot.received_team_count !== 60) {
+        return json({ error: `Antes de fechar, gere e valide o snapshot completo da rodada ${finalRound} (60 participantes).` }, 409);
+      }
+      const { error: closeError } = await admin.from('league_closed_periods').upsert({
+        period_key: period, season_year: season, closed_by: userId,
+        baseline_round: baselineRound, final_round: finalRound, snapshot_id: snapshot.id,
+        closure_source: 'manual_override', updated_at: new Date().toISOString(),
+      }, { onConflict: 'period_key,season_year' });
+      if (closeError) throw new Error(`Falha ao registrar fechamento: ${closeError.message}`);
+      return json({ ok: true, closed: true, period, baseline_round: baselineRound, final_round: finalRound, snapshot_id: snapshot.id });
+    }
+
     // Publicação genérica dos rankings calculados a partir de snapshots.
     if (url.searchParams.get('action') === 'publish_period') {
       const period = String(url.searchParams.get('periodo') ?? '').toUpperCase();
