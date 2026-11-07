@@ -1,5 +1,5 @@
 -- Liga Clássica: snapshots acumulados por rodada e referências dos períodos.
--- Esta migration apenas cria a estrutura e registra os limites históricos informados.
+-- Esta migration cria a estrutura para registrar os limites históricos após confirmação.
 -- Nenhum ranking existente em sheets_cache é alterado.
 
 CREATE TABLE IF NOT EXISTS public.classic_league_round_snapshots (
