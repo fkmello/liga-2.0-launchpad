@@ -30,6 +30,12 @@ const groupLabels: Record<string, string> = {
 type ClassicSyncResult = {
   ok?: boolean;
   already_complete?: boolean;
+  published?: boolean;
+  period?: string;
+  baseline_round?: number;
+  final_round?: number;
+  participant_count?: number;
+  total_points?: number;
   season?: number;
   round?: number;
   market_round?: number;
@@ -79,6 +85,40 @@ const AdminLeague = () => {
       setClassicSyncResult(result);
     } catch (error) {
       setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao sincronizar a Liga Clássica.');
+    } finally {
+      setSyncingClassicLeague(false);
+    }
+  };
+
+
+  const publishNovemberRanking = async () => {
+    setSyncingClassicLeague(true);
+    setClassicSyncResult(null);
+    setClassicSyncError(null);
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.access_token) {
+        throw new Error('Sua sessão expirou. Entre novamente no aplicativo e tente outra vez.');
+      }
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-classic-league?season=2026&action=publish_monthly&periodo=NOVEMBRO&baseline_round=33&final_round=34`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      const result = await response.json().catch(() => ({})) as ClassicSyncResult;
+      if (!response.ok || result.ok !== true || result.published !== true) {
+        throw new Error(result.error || `A publicação falhou (HTTP ${response.status}).`);
+      }
+      setClassicSyncResult(result);
+    } catch (error) {
+      setClassicSyncError(error instanceof Error ? error.message : 'Erro inesperado ao publicar novembro.');
     } finally {
       setSyncingClassicLeague(false);
     }
@@ -163,16 +203,48 @@ const AdminLeague = () => {
               </AlertDialogContent>
             </AlertDialog>
 
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button className="w-full" variant="outline" disabled={syncingClassicLeague}>
+                  {syncingClassicLeague ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Medal className="w-4 h-4 mr-2" />}
+                  Publicar ranking de novembro (rodadas 33–34)
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Atualizar o ranking de novembro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O ranking mensal será calculado para os 60 participantes pela diferença entre o acumulado da rodada 34 e o da rodada 33. Somente ranking_liga:NOVEMBRO será atualizado; anual, turnos e demais meses permanecerão intactos.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={publishNovemberRanking}>
+                    Calcular e publicar novembro
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             {classicSyncResult && (
               <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 space-y-1">
                 <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
                   <CheckCircle2 className="w-4 h-4" />
                   {classicSyncResult.already_complete ? 'Snapshot desta rodada já estava completo' : 'Snapshot gravado com sucesso'}
                 </div>
-                <p className="text-xs text-foreground">
-                  Temporada {classicSyncResult.season} · Rodada {classicSyncResult.round} ·
-                  {' '}{classicSyncResult.received_team_count}/{classicSyncResult.expected_team_count} participantes
-                </p>
+                {classicSyncResult.published ? (
+                  <p className="text-xs text-foreground">
+                    Temporada {classicSyncResult.season} · {classicSyncResult.period} ·
+                    {' '}{classicSyncResult.participant_count} participantes publicados ·
+                    {' '}rodadas {classicSyncResult.baseline_round}–{classicSyncResult.final_round}
+                  </p>
+                ) : (
+                  <p className="text-xs text-foreground">
+                    Temporada {classicSyncResult.season} · Rodada {classicSyncResult.round} ·
+                    {' '}{classicSyncResult.received_team_count}/{classicSyncResult.expected_team_count} participantes
+                  </p>
+                )}
                 {classicSyncResult.snapshot_id && (
                   <p className="text-[10px] text-muted-foreground break-all">Snapshot: {classicSyncResult.snapshot_id}</p>
                 )}
