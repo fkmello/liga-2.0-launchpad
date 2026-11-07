@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fetchJsonWithRetry } from '../_shared/sync/http.ts';
-import { parseClassicLeagueRoster, resolveClassicLeagueCompletedRound } from '../_shared/classicLeagueRules.ts';
+import { parseClassicLeagueRoster, resolveClassicLeagueCompletedRound, type ClassicLeagueRosterTeam } from '../_shared/classicLeagueRules.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +20,7 @@ const SEASON_MIN = 2000;
 const SEASON_MAX = 2100;
 
 type MarketStatus = { status_mercado: number; rodada_atual: number };
+type RosterTeam = ClassicLeagueRosterTeam;
 type CartolaTeam = {
   pontos_campeonato?: number;
   time?: { nome?: string; url_escudo_svg?: string };
