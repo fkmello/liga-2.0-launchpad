@@ -101,6 +101,9 @@ Deno.serve(async (req) => {
     if (!Number.isInteger(season) || season < SEASON_MIN || season > SEASON_MAX) {
       return json({ error: 'Parâmetro season inválido.' }, 400);
     }
+    if (cronAuthorized && season !== 2026) {
+      return json({ error: 'A sincronização automática está habilitada somente para a temporada 2026.' }, 400);
+    }
 
     let market: MarketStatus | null = null;
     let latestCompletedRound: number | null = null;
