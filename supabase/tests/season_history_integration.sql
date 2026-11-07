@@ -2,6 +2,48 @@
 -- Apply only the two season-history migrations to a disposable PostgreSQL database.
 \i supabase/migrations/20261031193000_season_history_foundation.sql
 \i supabase/migrations/20261101130000_archive_season_history_rpc.sql
+\i supabase/migrations/20261107153000_classic_league_snapshots.sql
+
+-- Validate the classic-league snapshot schema, access boundaries and invariants.
+DO $body$
+BEGIN
+  IF to_regclass('public.classic_league_round_snapshots') IS NULL
+     OR to_regclass('public.classic_league_team_round_points') IS NULL THEN
+    RAISE EXCEPTION 'FAIL: classic league snapshot tables were not created';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.classic_league_round_snapshots'::regclass)
+     OR NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.classic_league_team_round_points'::regclass) THEN
+    RAISE EXCEPTION 'FAIL: RLS is not enabled on snapshot tables';
+  END IF;
+  IF has_table_privilege('anon','public.classic_league_round_snapshots','SELECT')
+     OR has_table_privilege('authenticated','public.classic_league_team_round_points','INSERT') THEN
+    RAISE EXCEPTION 'FAIL: client roles have direct access to snapshot tables';
+  END IF;
+  IF NOT has_table_privilege('service_role','public.classic_league_round_snapshots','SELECT')
+     OR NOT has_table_privilege('service_role','public.classic_league_team_round_points','INSERT') THEN
+    RAISE EXCEPTION 'FAIL: service_role lacks snapshot access';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='league_closed_periods'
+      AND column_name='baseline_round'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='league_closed_periods'
+      AND column_name='final_round'
+  ) THEN
+    RAISE EXCEPTION 'FAIL: closed period round boundary columns are missing';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.classic_league_round_snapshots
+      (season_year, round_number, status, expected_team_count, received_team_count, completed_at)
+    VALUES (2096, 1, 'complete', 60, 59, now());
+    RAISE EXCEPTION 'FAIL: incomplete snapshot was accepted as complete';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END $body$;
+
 
 INSERT INTO public.season_archives (league, season, status, summary)
 VALUES ('ci-draft-visibility', 2097, 'draft', '{}'::jsonb);
