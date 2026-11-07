@@ -96,13 +96,22 @@ Deno.serve(async (req) => {
       return json({ error: 'Parâmetro season inválido.' }, 400);
     }
 
-    const market = await fetchJsonWithRetry(`${API}/mercado/status`, {}, { timeoutMs: 10000, retries: 2 }) as MarketStatus;
-    const latestCompletedRound = resolveClassicLeagueCompletedRound(market);
+    let market: MarketStatus | null = null;
+    let latestCompletedRound: number | null = null;
+    const ensureMarket = async () => {
+      if (latestCompletedRound === null) {
+        market = await fetchJsonWithRetry(`${API}/mercado/status`, {}, { timeoutMs: 10000, retries: 2 }) as MarketStatus;
+        latestCompletedRound = resolveClassicLeagueCompletedRound(market);
+      }
+      return latestCompletedRound;
+    };
     const requestedRound = url.searchParams.has('round') ? Number(url.searchParams.get('round')) : null;
-    if (requestedRound !== null && (!Number.isInteger(requestedRound) || requestedRound < 1 || requestedRound > latestCompletedRound)) {
-      return json({ error: `Parâmetro round inválido. Informe uma rodada concluída entre 1 e ${latestCompletedRound}.` }, 400);
+    if (requestedRound !== null) {
+      const latest = await ensureMarket();
+      if (!Number.isInteger(requestedRound) || requestedRound < 1 || requestedRound > latest) {
+        return json({ error: `Parâmetro round inválido. Informe uma rodada concluída entre 1 e ${latest}.` }, 400);
+      }
     }
-    const targetRound = requestedRound ?? latestCompletedRound;
 
     if (url.searchParams.get('action') === 'close_period') {
       const period = String(url.searchParams.get('periodo') ?? '').toUpperCase();
@@ -120,7 +129,8 @@ Deno.serve(async (req) => {
         if (novemberError) throw new Error(`Falha ao consultar fechamento de novembro: ${novemberError.message}`);
         baselineRound = november?.final_round ?? null;
       }
-      const finalRound = period === '1_TURNO' ? 19 : latestCompletedRound;
+      const latest = await ensureMarket();
+      const finalRound = period === '1_TURNO' ? 19 : latest;
       if (baselineRound === null || baselineRound >= finalRound) {
         return json({ error: 'Não foi possível determinar os limites do período. Verifique o fechamento do mês anterior.' }, 409);
       }
@@ -161,7 +171,7 @@ Deno.serve(async (req) => {
         JULHO: 18, AGOSTO: 21, SETEMBRO: 25, OUTUBRO: 28, NOVEMBRO: 33,
       };
       let baselineRound: number | null = null;
-      let finalRound = latestCompletedRound;
+      let finalRound: number;
 
       if (period === 'ANUAL') {
         baselineRound = null;
@@ -184,16 +194,18 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Períodos fechados usam exatamente os limites registrados no fechamento.
-      if (closedPeriod?.final_round !== null && closedPeriod?.final_round !== undefined) {
+      // Períodos fechados usam os snapshots registrados e não dependem do mercado atual.
+      const isClosedWithFinalRound = closedPeriod?.final_round !== null && closedPeriod?.final_round !== undefined;
+      if (isClosedWithFinalRound) {
         finalRound = closedPeriod.final_round;
         if (closedPeriod.baseline_round !== null) baselineRound = closedPeriod.baseline_round;
       }
-      if (period === '1_TURNO') finalRound = 19;
+      if (period === '1_TURNO' && !isClosedWithFinalRound) finalRound = 19;
+      if (!isClosedWithFinalRound && period !== '1_TURNO') finalRound = await ensureMarket();
       if (baselineRound !== null && (!Number.isInteger(baselineRound) || baselineRound < 0 || baselineRound >= finalRound)) {
         return json({ error: `Limites inválidos para ${period}: base ${baselineRound}, final ${finalRound}.` }, 400);
       }
-      if (finalRound > latestCompletedRound) {
+      if (!isClosedWithFinalRound && latestCompletedRound !== null && finalRound > latestCompletedRound) {
         return json({ error: `A rodada final ${finalRound} ainda não está concluída.` }, 409);
       }
 
@@ -271,6 +283,9 @@ Deno.serve(async (req) => {
     }
 
 
+    const latest = await ensureMarket();
+    const targetRound = requestedRound ?? latest;
+
     const { data: cache, error: cacheError } = await admin
       .from('sheets_cache')
       .select('data')
@@ -310,7 +325,7 @@ Deno.serve(async (req) => {
         .update({
           status: 'in_progress', source: 'cartola_api',
           source_endpoint: `${API}/time/id/{id}/${targetRound}`,
-          market_round: market.rodada_atual, market_status: market.status_mercado,
+          market_round: market!.rodada_atual, market_status: market!.status_mercado,
           expected_team_count: 60, received_team_count: 0,
           requested_at: new Date().toISOString(), completed_at: null, error_message: null,
           metadata: { retried: true, requested_by: userId },
@@ -338,7 +353,7 @@ Deno.serve(async (req) => {
         .insert({
           season_year: season, round_number: targetRound, source: 'cartola_api',
           source_endpoint: `${API}/time/id/{id}/${targetRound}`,
-          market_round: market.rodada_atual, market_status: market.status_mercado,
+          market_round: market.rodada_atual, market_status: market!.status_mercado,
           status: 'in_progress', expected_team_count: 60,
           received_team_count: 0, metadata: { requested_by: userId },
         })
@@ -369,7 +384,7 @@ Deno.serve(async (req) => {
         .update({
           status: 'complete', received_team_count: points.length,
           completed_at: new Date().toISOString(), error_message: null,
-          metadata: { requested_by: userId, market_round: market.rodada_atual, market_status: market.status_mercado },
+          metadata: { requested_by: userId, market_round: market!.rodada_atual, market_status: market!.status_mercado },
         })
         .eq('id', snapshotId)
         .eq('status', 'in_progress')
@@ -379,7 +394,7 @@ Deno.serve(async (req) => {
       if (!completed?.id) throw new Error('Snapshot não pôde ser marcado como completo; estado foi alterado durante a sincronização.');
 
       return json({
-        ok: true, season, round: targetRound, market_round: market.rodada_atual,
+        ok: true, season, round: targetRound, market_round: market!.rodada_atual,
         market_status: market.status_mercado, expected_team_count: 60,
         received_team_count: points.length, snapshot_id: snapshotId,
       });
