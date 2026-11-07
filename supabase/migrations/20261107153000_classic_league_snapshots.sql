@@ -98,37 +98,6 @@ BEGIN
   END IF;
 END $$;
 
--- Limites históricos de 2026 informados pelo administrador.
--- MARÇO é armazenado como MARCO, conforme a chave canônica já existente.
-UPDATE public.league_closed_periods
-SET baseline_round = CASE period_key
-      WHEN 'FEVEREIRO' THEN 0
-      WHEN 'MARCO' THEN 4
-      WHEN 'ABRIL' THEN 8
-      WHEN 'MAIO' THEN 13
-      WHEN 'JULHO' THEN 18
-      WHEN 'AGOSTO' THEN 21
-      WHEN 'SETEMBRO' THEN 25
-      WHEN 'OUTUBRO' THEN 28
-      WHEN '1_TURNO' THEN 0
-      ELSE baseline_round
-    END,
-    final_round = CASE period_key
-      WHEN 'FEVEREIRO' THEN 4
-      WHEN 'MARCO' THEN 8
-      WHEN 'ABRIL' THEN 13
-      WHEN 'MAIO' THEN 18
-      WHEN 'JULHO' THEN 21
-      WHEN 'AGOSTO' THEN 25
-      WHEN 'SETEMBRO' THEN 28
-      WHEN 'OUTUBRO' THEN 33
-      WHEN '1_TURNO' THEN 19
-      ELSE final_round
-    END,
-    closure_source = 'legacy_manual',
-    updated_at = now()
-WHERE season_year = 2026
-  AND period_key IN (
-    'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO',
-    'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', '1_TURNO'
-  );
+-- As rodadas históricas finais ainda precisam ser confirmadas pelo administrador.
+-- Não preencher baseline_round/final_round com estimativas ou datas de fechamento.
+-- Os dados históricos serão registrados em uma migration separada após confirmação.
